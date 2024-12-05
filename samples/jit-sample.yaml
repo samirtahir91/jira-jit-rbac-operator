@@ -1,0 +1,20 @@
+apiVersion: justintime.samir.io/v1
+kind: JitRequest
+metadata:
+  name: jitrequest-sample
+spec:
+  user: bob
+  clusterRole: edit
+  namespace: foo
+  startTime: 2024-12-05T05:45:00Z
+  endTime: 2024-12-06T05:50:00Z
+---
+# apiVersion: justintime.samir.io/v1
+# kind: JustInTimeConfig
+# metadata:
+#   name: jit-rbac-operator-default
+# spec:
+#   allowedClusterRoles:
+#   - admin
+#   - edit
+#   - bigting

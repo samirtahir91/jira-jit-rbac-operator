@@ -1,0 +1,7 @@
+apiVersion: justintime.samir.io/v1
+kind: JustInTimeConfig
+metadata:
+  name: default
+spec:
+  allowedClusterRoles: 
+    - edit

@@ -1,0 +1,9 @@
+apiVersion: justintime.samir.io/v1
+kind: JustInTimeConfig
+metadata:
+  name: jit-rbac-operator-config
+spec:
+  allowedClusterRoles:
+  - admin
+  - edit
+  - bigting

@@ -1,0 +1,5 @@
+## Append samples of your project ##
+resources:
+- justintime_v1_jitrequest.yaml
+- justintime_v1_justintimeconfig.yaml
+# +kubebuilder:scaffold:manifestskustomizesamples
