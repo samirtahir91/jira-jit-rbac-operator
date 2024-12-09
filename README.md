@@ -1,4 +1,4 @@
-# jit-rbac-operator
+# jit-rbac-operator - README UNDER CONSTRUCTION FOR JIRA INTEGRATIOM
 
 The `jit-rbac-operator` is a Kubernetes operator that creates short-lived rolebindings for users based on a JitRequest custom resource, it empowers self-service of Just-In-Time privileged access using Kubernetes RBAC.
 
