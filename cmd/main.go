@@ -25,6 +25,8 @@ import (
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
+
+	jira "github.com/ctreminiom/go-atlassian/v2/jira/v2"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
 	"k8s.io/apimachinery/pkg/runtime"
@@ -166,10 +168,25 @@ func main() {
 		configCacheFilePath = customCachePath
 	}
 
+	// Jira client
+	jiraBaseUrl := "http://my-jira-release.default.svc.cluster.local:80"
+	if customJiraBaseUrl := os.Getenv("JIRA_BASE_URL"); customJiraBaseUrl != "" {
+		jiraBaseUrl = customJiraBaseUrl
+	}
+	jiraUsername := os.Getenv("JIRA_USERNAME")
+	jiraPassword := os.Getenv("JIRA_API_TOKEN")
+	jiraClient, err := jira.New(nil, jiraBaseUrl)
+	if err != nil {
+		setupLog.Error(err, "unable to start jira client")
+		os.Exit(1)
+	}
+	jiraClient.Auth.SetBasicAuth(jiraUsername, jiraPassword)
+
 	if err = (&controller.JitRequestReconciler{
-		Client:   mgr.GetClient(),
-		Scheme:   mgr.GetScheme(),
-		Recorder: mgr.GetEventRecorderFor("githubapp-controller"),
+		JiraClient: jiraClient,
+		Client:     mgr.GetClient(),
+		Scheme:     mgr.GetScheme(),
+		Recorder:   mgr.GetEventRecorderFor("githubapp-controller"),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "JitRequest")
 		os.Exit(1)

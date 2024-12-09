@@ -57,6 +57,9 @@ spec:
           spec:
             description: JitRequestSpec defines the desired state of JitRequest.
             properties:
+              approver:
+                description: Approver's user mail
+                type: string
               clusterRole:
                 description: Role to bind
                 type: string
@@ -66,8 +69,17 @@ spec:
                   ISO 8601 format
                 format: date-time
                 type: string
+              justification:
+                description: Justification
+                type: string
               namespace:
                 description: Namespace to bind role and user
+                type: string
+              productOwner:
+                description: Product Owner's user email
+                type: string
+              reporter:
+                description: Requestor's username/email
                 type: string
               startTime:
                 description: |-
@@ -75,25 +87,28 @@ spec:
                   ISO 8601 format
                 format: date-time
                 type: string
-              user:
-                description: Requestor's username/email
-                type: string
             required:
+            - approver
             - clusterRole
             - endTime
+            - justification
             - namespace
+            - productOwner
+            - reporter
             - startTime
-            - user
             type: object
           status:
             description: JitRequestStatus defines the observed state of JitRequest.
             properties:
-              error:
-                description: Error field to store error messages
+              jiraTicket:
+                description: Jira ticket for jit request
+                type: string
+              message:
+                description: Detailed message of jit request
                 type: string
               state:
                 default: Pending
-                description: Expiry of JIT access
+                description: Status of jit request
                 type: string
             type: object
         type: object

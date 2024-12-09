@@ -98,6 +98,9 @@ Current integration tests cover the scenarios:
 ```sh
 export JIT_RBAC_OPERATOR_CONFIG_PATH=/tmp/jit-test/
 export OPERATOR_NAMESPACE=default
+export JIRA_BASE_URL=http://127.0.0.1
+export JIRA_USERNAME=jira-rbac-operator
+export JIRA_API_TOKEN=foobar
 # run
 make run
 ```

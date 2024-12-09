@@ -1,0 +1,34 @@
+apiVersion: justintime.samir.io/v1
+kind: JustInTimeConfig
+metadata:
+  name: jit-rbac-operator-default
+spec:
+  allowedClusterRoles:
+    - admin
+    - edit
+  rejectedTransitionID: "21"
+  jiraProject: IAM
+  jiraIssueType: Access Request
+  approvedTransitionID: "41"
+  customFields:
+    Reporter:
+      type: "text"
+      jiraCustomField: "customfield_10113"
+    Approver:
+      type: "user"
+      jiraCustomField: "customfield_10114"
+    ProductOwner:
+      type: "user"
+      jiraCustomField: "customfield_10115"
+    Justification:
+      type: "text"
+      jiraCustomField: "customfield_10116"
+    ClusterRole:
+      type: "select"
+      jiraCustomField: "customfield_10117"
+    StartTime:
+      type: "date"
+      jiraCustomField: "customfield_10118"
+    EndTime:
+      type: "date"
+      jiraCustomField: "customfield_10119"
