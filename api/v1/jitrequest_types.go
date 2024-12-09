@@ -23,24 +23,34 @@ import (
 // JitRequestSpec defines the desired state of JitRequest.
 type JitRequestSpec struct {
 	// Requestor's username/email
-	User string `json:"user"`
+	Reporter string `json:"reporter" validate:"required"`
+	// Approver's user mail
+	Approver string `json:"approver" validate:"required"`
+	// Product Owner's user email
+	ProductOwner string `json:"productOwner" validate:"required"`
+	// Justification
+	Justification string `json:"justification" validate:"required"`
 	// Role to bind
-	ClusterRole string `json:"clusterRole"`
+	ClusterRole string `json:"clusterRole" validate:"required"`
 	// Namespace to bind role and user
-	Namespace string `json:"namespace"`
+	Namespace string `json:"namespace" validate:"required"`
 	// Start time for the JIT access, i.e. "2024-12-04T21:00:00Z"
 	// ISO 8601 format
-	StartTime metav1.Time `json:"startTime"`
+	StartTime metav1.Time `json:"startTime" validate:"required"`
 	// End time for the JIT access, i.e. "2024-12-04T22:00:00Z"
 	// ISO 8601 format
-	EndTime metav1.Time `json:"endTime"`
+	EndTime metav1.Time `json:"endTime" validate:"required"`
 }
 
 // JitRequestStatus defines the observed state of JitRequest.
 type JitRequestStatus struct {
-	// Expiry of JIT access
+	// Status of jit request
 	// +kubebuilder:default:=Pending
 	State string `json:"state,omitempty"`
+	// Detailed message of jit request
+	Message string `json:"message,omitempty"`
+	// Jira ticket for jit request
+	JiraTicket string `json:"jiraTicket,omitempty"`
 }
 
 // +kubebuilder:object:root=true

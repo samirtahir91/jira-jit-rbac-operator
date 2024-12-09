@@ -21,27 +21,46 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"reflect"
 	"time"
+
+	jira "github.com/ctreminiom/go-atlassian/v2/jira/v2"
+	"github.com/ctreminiom/go-atlassian/v2/pkg/infra/models"
+	"github.com/go-logr/logr"
 
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder" // Required for Watching
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	justintimev1 "jit-rbac-operator/api/v1"
 	"jit-rbac-operator/internal/config"
+	"jit-rbac-operator/pkg/configuration"
 )
 
-var OperatorNamespace = os.Getenv("OPERATOR_NAMESPACE")
+var (
+	OperatorNamespace = os.Getenv("OPERATOR_NAMESPACE")
+)
+
+const (
+	StatusRejected    = "Rejected"
+	StatusPreApproved = "Pre-Approved"
+	StatusSucceeded   = "Succeeded"
+)
 
 // JitRequestReconciler reconciles a JitRequest object
 type JitRequestReconciler struct {
+	JiraClient *jira.Client
 	client.Client
 	Scheme            *runtime.Scheme
 	Recorder          record.EventRecorder
@@ -53,81 +72,228 @@ func (r *JitRequestReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	l := log.FromContext(ctx)
 
 	// Fetch the JitRequest instance
-	jitRequest := &justintimev1.JitRequest{}
-	err := r.Get(ctx, req.NamespacedName, jitRequest)
+	jitRequest, err := r.fetchJitRequest(ctx, req.NamespacedName)
 	if err != nil {
-		if apierrors.IsNotFound(err) {
-			l.Info("JitRequest resource not found. Deleting managed objects.")
-			// Delete owned rbac objects
-			if err := r.deleteOwnedObjects(ctx, jitRequest); err != nil {
-				return ctrl.Result{}, err
-			}
-			return ctrl.Result{}, nil
+		return r.handleFetchError(ctx, l, err, jitRequest)
+	}
+
+	// Fetch operator config
+	operatorConfig, err := r.readConfigFromFile(config.ConfigCacheFilePath, config.ConfigFile)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	rejectedTransitionID := operatorConfig.RejectedTransitionID()
+	allowedClusterRoles := operatorConfig.AllowedClusterRoles()
+	jiraProject := operatorConfig.JiraProject()
+	jiraIssueType := operatorConfig.JiraIssueType()
+	approvedTransitionID := operatorConfig.ApprovedTransitionID()
+	customFieldsConfig := operatorConfig.CustomFields()
+
+	l.Info("Got JitRequest", "Requestor", jitRequest.Spec.Reporter, "Role", jitRequest.Spec.ClusterRole, "Namespace", jitRequest.Spec.Namespace)
+
+	// Handle JitRequest based on its status
+	switch jitRequest.Status.State {
+	case StatusRejected:
+		return r.handleRejected(ctx, l, jitRequest, rejectedTransitionID)
+	case "":
+		return r.handleNewRequest(ctx, l, jitRequest, allowedClusterRoles, jiraProject, jiraIssueType, customFieldsConfig)
+	case StatusPreApproved:
+		return r.handlePreApproved(ctx, l, jitRequest, approvedTransitionID)
+	case StatusSucceeded:
+		return r.handleCleaup(ctx, l, jitRequest)
+	default:
+		return r.handleCleaup(ctx, l, jitRequest)
+	}
+}
+
+// Fetch a JitRequest
+func (r *JitRequestReconciler) fetchJitRequest(ctx context.Context, namespacedName types.NamespacedName) (*justintimev1.JitRequest, error) {
+	jitRequest := &justintimev1.JitRequest{}
+	err := r.Get(ctx, namespacedName, jitRequest)
+	return jitRequest, err
+}
+
+// Cleanup owned objects (rolebindings) on deleted JitRequests
+func (r *JitRequestReconciler) handleFetchError(
+	ctx context.Context,
+	l logr.Logger,
+	err error,
+	jitRequest *justintimev1.JitRequest,
+) (ctrl.Result, error) {
+	if apierrors.IsNotFound(err) {
+		l.Info("JitRequest resource not found. Deleting managed objects.")
+		if err := r.deleteOwnedObjects(ctx, jitRequest); err != nil {
+			return ctrl.Result{}, err
 		}
-		l.Error(err, "failed to get JitRequest")
+		return ctrl.Result{}, nil
+	}
+	l.Error(err, "failed to get JitRequest")
+	return ctrl.Result{}, err
+}
+
+// Read operator configuration from config file
+func (r *JitRequestReconciler) readConfigFromFile(filePath string, fileName string) (configuration.Configuration, error) {
+	// common lock for concurrent reads
+	config.ConfigLock.RLock()
+	defer config.ConfigLock.RUnlock()
+
+	data, err := os.ReadFile(fmt.Sprintf("%s/%s", filePath, fileName))
+	if err != nil {
+		return nil, fmt.Errorf("failed to read configuration file: %w", err)
+	}
+
+	var config configuration.Config
+	if err := json.Unmarshal(data, &config); err != nil {
+		return nil, fmt.Errorf("failed to parse configuration file: %w", err)
+	}
+
+	return &config, nil
+}
+
+// Reject Jira ticket and delete JitRequest
+func (r *JitRequestReconciler) handleRejected(
+	ctx context.Context,
+	l logr.Logger,
+	jitRequest *justintimev1.JitRequest,
+	rejectedTransitionID string,
+) (ctrl.Result, error) {
+	if err := r.rejectJiraTicket(ctx, jitRequest, rejectedTransitionID); err != nil {
+		l.Error(err, "failed to reject jira ticket")
+		return ctrl.Result{}, err
+	}
+	if err := r.deleteJitRequest(ctx, jitRequest); err != nil {
+		l.Error(err, "failed to delete JitRequest")
+		return ctrl.Result{}, err
+	}
+	return ctrl.Result{}, nil
+}
+
+// Create new Jira ticket for new JitRequests, validate config
+func (r *JitRequestReconciler) handleNewRequest(
+	ctx context.Context,
+	l logr.Logger,
+	jitRequest *justintimev1.JitRequest,
+	allowedClusterRoles []string,
+	jiraProject,
+	jiraIssueType string,
+	customFieldsConfig *justintimev1.CustomFieldsSpec,
+) (ctrl.Result, error) {
+	jiraIssueKey, err := r.createJiraTicket(ctx, jitRequest, jiraProject, jiraIssueType, customFieldsConfig)
+	if err != nil {
+		l.Error(err, "failed to createJiraTicket")
 		return ctrl.Result{}, err
 	}
 
-	l.Info(
-		"Got JitRequest",
-		"Requestor", jitRequest.Spec.User,
-		"Role", jitRequest.Spec.ClusterRole,
-		"Namespace", jitRequest.Spec.Namespace,
-	)
-
-	// Get state of JitRequest, process if not Succeeded
-	jitStatus := jitRequest.Status.State
-	if jitStatus != "Succeeded" {
-		// Check cluster role is allowed from local config file
-		allowedClusterRoles, err := ReadAllowedClusterRoles(config.ConfigCacheFilePath, config.ConfigFile)
-		if err != nil {
-			l.Error(err, "failed to read allowed cluster roles from configuration file")
-			return ctrl.Result{}, err
-		}
-
-		// Check if the cluster role is allowed
-		if !contains(allowedClusterRoles, jitRequest.Spec.ClusterRole) {
-			l.Error(fmt.Errorf("invalid cluster role"), "ClusterRole not allowed", "role", jitRequest.Spec.ClusterRole)
-			// Update the status to Rejected
-			errorMsg := fmt.Sprintf("ClusterRole '%s' is not allowed", jitRequest.Spec.ClusterRole)
-			if err := r.updateStatus(ctx, jitRequest, errorMsg, 3); err != nil {
-				return ctrl.Result{}, err
-			}
-			// record event
-			r.raiseEvent(jitRequest, "Warning", "ValidationFailed", errorMsg)
-			return ctrl.Result{}, nil
-		}
-		l.Info("JitRequest is valid", "ClusterRole", jitRequest.Spec.ClusterRole)
-
-		// Check start time, requeue if needed
-		startTime := jitRequest.Spec.StartTime.Time
-		if startTime.After(time.Now()) {
-			delay := time.Until(startTime)
-			l.Info("Start time not reached, requeuing", "requeueAfter", delay)
-			return ctrl.Result{RequeueAfter: delay}, nil
-		}
-
-		// Create rbac for JIT request
-		l.Info("Creating role binding")
-		if err := r.createRbac(ctx, jitRequest); err != nil {
-			l.Error(err, "failed to create rbac for JIT request")
-			// Raise event
-			r.raiseEvent(
-				jitRequest,
-				"Warning",
-				"FailedRBAC",
-				fmt.Sprintf("Error: %s", err),
-			)
-			return ctrl.Result{}, err
-		}
-
-		// Update the status to Succeeded
-		if err := r.updateStatus(ctx, jitRequest, "Succeeded", 3); err != nil {
-			return ctrl.Result{}, err
-		}
+	// check cluster role is allowed
+	if !contains(allowedClusterRoles, jitRequest.Spec.ClusterRole) {
+		return r.rejectInvalidRole(ctx, l, jitRequest, jiraIssueKey)
 	}
 
-	// Requeue for deletion
+	return r.preApproveRequest(ctx, l, jitRequest, jiraIssueKey)
+}
+
+// Reject an invalid cluster role
+func (r *JitRequestReconciler) rejectInvalidRole(
+	ctx context.Context,
+	l logr.Logger,
+	jitRequest *justintimev1.JitRequest,
+	jiraIssueKey string,
+) (ctrl.Result, error) {
+	errorMsg := fmt.Sprintf("ClusterRole '%s' is not allowed", jitRequest.Spec.ClusterRole)
+	r.raiseEvent(jitRequest, "Warning", "ValidationFailed", errorMsg)
+	if err := r.updateStatus(ctx, jitRequest, StatusRejected, errorMsg, jiraIssueKey, 3); err != nil {
+		l.Error(err, "failed to update status to Rejected")
+		return ctrl.Result{}, err
+	}
+	return ctrl.Result{}, nil
+}
+
+// Pre-apprvoe the JitRequest, update the Jira ticke tand queue for start time
+func (r *JitRequestReconciler) preApproveRequest(
+	ctx context.Context,
+	l logr.Logger,
+	jitRequest *justintimev1.JitRequest,
+	jiraIssueKey string,
+) (ctrl.Result, error) {
+	startTime := jitRequest.Spec.StartTime.Time
+	if startTime.After(time.Now()) {
+		// update status and event
+		r.raiseEvent(jitRequest, "Normal", StatusPreApproved, fmt.Sprintf("ClusterRole '%s' is allowed", jitRequest.Spec.ClusterRole))
+		if err := r.updateStatus(ctx, jitRequest, StatusPreApproved, "Pre-approval - Access will be granted at start time pending human approval(s)", jiraIssueKey, 3); err != nil {
+			l.Error(err, "failed to update status to Pre-Approved")
+			return ctrl.Result{}, err
+		}
+
+		// update jira with comment
+		jiraTicket := jitRequest.Status.JiraTicket
+		comment := jitRequest.Status.Message
+		if err := r.updateJiraTicket(ctx, jiraTicket, comment); err != nil {
+			return ctrl.Result{}, err
+		}
+
+		// requeue for start time
+		delay := time.Until(startTime)
+		l.Info("Start time not reached, requeuing", "requeueAfter", delay)
+		return ctrl.Result{RequeueAfter: delay}, nil
+	}
+
+	// invalid start time, reject
+	errMsg := fmt.Errorf("start time %s must be after current time", jitRequest.Spec.StartTime.Time)
+	if err := r.updateStatus(ctx, jitRequest, StatusRejected, errMsg.Error(), jiraIssueKey, 3); err != nil {
+		l.Error(err, "failed to update status to Rejected")
+		return ctrl.Result{}, err
+	}
+
+	l.Error(errMsg, "start time validation failed")
+	return ctrl.Result{}, nil
+}
+
+// Create the rolebinding for approved JitRequests if the Jira is approved
+func (r *JitRequestReconciler) handlePreApproved(
+	ctx context.Context,
+	l logr.Logger,
+	jitRequest *justintimev1.JitRequest,
+	approvedTransitionID string,
+) (ctrl.Result, error) {
+	// check if needs to be re-queued
+	startTime := jitRequest.Spec.StartTime.Time
+	if startTime.After(time.Now()) {
+		// requeue for start time
+		delay := time.Until(startTime)
+		l.Info("Start time not reached, requeuing", "requeueAfter", delay)
+		return ctrl.Result{RequeueAfter: delay}, nil
+	}
+
+	jiraTicket := jitRequest.Status.JiraTicket
+	if err := r.getJiraApproval(ctx, jitRequest); err != nil {
+		l.Error(err, StatusRejected, "jira ticket", jiraTicket)
+		if err := r.updateStatus(ctx, jitRequest, StatusRejected, "Jira ticket has not been approved", jiraTicket, 3); err != nil {
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{}, nil
+	}
+
+	l.Info("Creating role binding")
+	if err := r.createRbac(ctx, jitRequest); err != nil {
+		l.Error(err, "failed to create rbac for JIT request")
+		r.raiseEvent(jitRequest, "Warning", "FailedRBAC", fmt.Sprintf("Error: %s", err))
+		return ctrl.Result{}, err
+	}
+
+	if err := r.updateStatus(ctx, jitRequest, StatusSucceeded, "Access granted until end time", jiraTicket, 3); err != nil {
+		return ctrl.Result{}, err
+	}
+
+	if err := r.completeJiraTicket(ctx, jitRequest, approvedTransitionID); err != nil {
+		return ctrl.Result{}, err
+	}
+
+	// Queue for deletion at end time
+	return r.handleCleaup(ctx, l, jitRequest)
+}
+
+// Handle and queue succeeded and unknown JitRequests for deletion
+func (r *JitRequestReconciler) handleCleaup(ctx context.Context, l logr.Logger, jitRequest *justintimev1.JitRequest) (ctrl.Result, error) {
 	endTime := jitRequest.Spec.EndTime.Time
 	if endTime.After(time.Now()) {
 		delay := time.Until(endTime)
@@ -135,16 +301,212 @@ func (r *JitRequestReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		return ctrl.Result{RequeueAfter: delay}, nil
 	}
 
-	// It's expired, delete the JitRequest
 	l.Info("End time reached, deleting JitRequest")
-	if err := r.Client.Delete(ctx, jitRequest); err != nil {
-		l.Error(err, "Failed to delete JitRequest")
+	if err := r.deleteJitRequest(ctx, jitRequest); err != nil {
 		return ctrl.Result{}, err
 	}
-
-	l.Info("Successfully deleted JitRequest", "name", jitRequest.Name)
-
 	return ctrl.Result{}, nil
+}
+
+// Update jira with comment
+func (r *JitRequestReconciler) updateJiraTicket(ctx context.Context, jiraTicket, comment string) error {
+	l := log.FromContext(ctx)
+
+	l.Info("Updating Jira ticket", "jiraTicket", jiraTicket)
+
+	// Add a comment to the Jira issue
+	payload := &models.CommentPayloadSchemeV2{
+		Body: comment,
+	}
+	_, _, err := r.JiraClient.Issue.Comment.Add(context.Background(), jiraTicket, payload, nil)
+	if err != nil {
+		l.Error(err, "failed to add comment to jira ticket", "jiraTicket", jiraTicket)
+		return err
+	}
+
+	return nil
+}
+
+// Complete jira with comment
+func (r *JitRequestReconciler) completeJiraTicket(ctx context.Context, jitRequest *justintimev1.JitRequest, approvedTransitionID string) error {
+	l := log.FromContext(ctx)
+
+	// Add a comment to the Jira issue
+	jiraTicket := jitRequest.Status.JiraTicket
+	comment := fmt.Sprintf("Completed - %s", jitRequest.Status.Message)
+	l.Info("Compelting Jira ticket", "jiraTicket", jiraTicket)
+	if err := r.updateJiraTicket(ctx, jiraTicket, comment); err != nil {
+		return err
+	}
+
+	// Complete ticket
+	options := &models.IssueMoveOptionsV2{
+		Fields: &models.IssueSchemeV2{
+			Fields: &models.IssueFieldsSchemeV2{
+				Resolution: &models.ResolutionScheme{},
+			},
+		},
+	}
+	_, err := r.JiraClient.Issue.Move(context.Background(), jiraTicket, approvedTransitionID, options)
+	if err != nil {
+		l.Error(err, "failed to transition jira ticket to completed")
+		return err
+	}
+
+	return nil
+}
+
+// Check Jira ticket is approved
+func (r *JitRequestReconciler) getJiraApproval(ctx context.Context, jitRequest *justintimev1.JitRequest) error {
+	l := log.FromContext(ctx)
+	l.Info("Checking Jira ticket approval", "jit request", jitRequest)
+
+	jiraIssueKey := jitRequest.Status.JiraTicket
+
+	// Fetch the Jira issue details
+	issue, _, err := r.JiraClient.Issue.Get(ctx, jiraIssueKey, nil, nil)
+	if err != nil {
+		l.Error(err, "failed to fetch Jira ticket details", "jiraTicket", jiraIssueKey)
+		return err
+	}
+
+	// Check if the issue status is "Approved"
+	if issue.Fields.Status.Name == "Approved" {
+		l.Info("Jira ticket is approved", "jiraTicket", jiraIssueKey)
+		return nil
+	}
+
+	return fmt.Errorf("failed on jira approval")
+}
+
+// Create a jira ticket for a JitRequest
+func (r *JitRequestReconciler) createJiraTicket(
+	ctx context.Context,
+	jitRequest *justintimev1.JitRequest,
+	jiraProject,
+	jiraIssueType string,
+	customFieldsConfig *justintimev1.CustomFieldsSpec,
+) (string, error) {
+	l := log.FromContext(ctx)
+
+	l.Info("Creating Jira ticket", "jiraTicket", jitRequest)
+
+	payload := models.IssueSchemeV2{
+		Fields: &models.IssueFieldsSchemeV2{
+			Summary: fmt.Sprintf("Automated JIT request for %s", jitRequest.Spec.Reporter),
+			Project: &models.ProjectScheme{
+				Key: jiraProject,
+			},
+			IssueType: &models.IssueTypeScheme{
+				Name: jiraIssueType,
+			},
+		},
+	}
+
+	customFields := models.CustomFields{}
+	specValue := reflect.ValueOf(jitRequest.Spec)
+
+	// Use reflection to iterate over the fields of CustomFieldsSpec
+	customFieldsValue := reflect.ValueOf(customFieldsConfig).Elem()
+	customFieldsType := customFieldsValue.Type()
+
+	for i := 0; i < customFieldsValue.NumField(); i++ {
+		field := customFieldsValue.Field(i)
+		fieldName := customFieldsType.Field(i).Name
+
+		specField := specValue.FieldByName(fieldName)
+		if !specField.IsValid() {
+			l.Error(fmt.Errorf("unknown custom field name"), "name", fieldName)
+			continue
+		}
+
+		var value string
+		switch specField.Kind() {
+		case reflect.String:
+			value = specField.String()
+		case reflect.Struct:
+			if specField.Type() == reflect.TypeOf(metav1.Time{}) {
+				value = specField.Interface().(metav1.Time).Format("2006-01-02T15:04:05.000-0700")
+			}
+		default:
+			l.Error(fmt.Errorf("unsupported field type"), "name", fieldName, "type", specField.Kind())
+			continue
+		}
+
+		settings := field.Interface().(justintimev1.CustomFieldSettings)
+		switch settings.Type {
+		case "text":
+			if err := customFields.Text(settings.JiraCustomField, value); err != nil {
+				l.Error(err, "failed to add text custom field", "field", settings.JiraCustomField)
+			}
+		case "select":
+			if err := customFields.Select(settings.JiraCustomField, value); err != nil {
+				l.Error(err, "failed to add select custom field", "field", settings.JiraCustomField)
+			}
+		case "user":
+			userField := map[string]interface{}{
+				"name": value,
+			}
+			if err := customFields.Raw(settings.JiraCustomField, userField); err != nil {
+				l.Error(err, "failed to add user custom field", "field", settings.JiraCustomField)
+			}
+		case "date":
+			if err := customFields.Text(settings.JiraCustomField, value); err != nil {
+				l.Error(err, "failed to add date custom field", "field", settings.JiraCustomField)
+			}
+		default:
+			l.Error(fmt.Errorf("unknown custom field type"), "field", settings.JiraCustomField, "type", settings.Type)
+		}
+	}
+
+	createdIssue, _, err := r.JiraClient.Issue.Create(context.Background(), &payload, &customFields)
+	if err != nil {
+		l.Error(err, "failed to create Jira ticket")
+		return "", err
+	}
+
+	l.Info("Jira ticket created successfully", "jiraTicket", createdIssue.Key)
+	return createdIssue.Key, nil
+}
+
+// Reject jira with comment
+func (r *JitRequestReconciler) rejectJiraTicket(ctx context.Context, jitRequest *justintimev1.JitRequest, rejectedTransitionID string) error {
+	l := log.FromContext(ctx)
+
+	// Add a comment to the Jira issue
+	jiraTicket := jitRequest.Status.JiraTicket
+	comment := fmt.Sprintf("Rejected - %s", jitRequest.Status.Message)
+	l.Info("Rejecting Jira ticket", "jiraTicket", jiraTicket)
+	if err := r.updateJiraTicket(ctx, jiraTicket, comment); err != nil {
+		return err
+	}
+
+	// reject ticket
+	options := &models.IssueMoveOptionsV2{
+		Fields: &models.IssueSchemeV2{
+			Fields: &models.IssueFieldsSchemeV2{
+				Resolution: &models.ResolutionScheme{},
+			},
+		},
+	}
+	_, err := r.JiraClient.Issue.Move(context.Background(), jiraTicket, rejectedTransitionID, options)
+	if err != nil {
+		l.Error(err, "failed to transition jira ticket")
+		return err
+	}
+
+	return nil
+}
+
+// Delete a JitRequest
+func (r *JitRequestReconciler) deleteJitRequest(ctx context.Context, jitRequest *justintimev1.JitRequest) error {
+	l := log.FromContext(ctx)
+	if err := r.Client.Delete(ctx, jitRequest); err != nil {
+		l.Error(err, "Failed to delete JitRequest")
+		return err
+	}
+	l.Info("Successfully deleted JitRequest", "name", jitRequest.Name)
+	return nil
 }
 
 // Raise event in operator namespace
@@ -157,39 +519,7 @@ func (r *JitRequestReconciler) raiseEvent(obj client.Object, eventType, reason, 
 		UID:        obj.GetUID(),
 	}
 
-	// // debugging
-	// log.Log.V(1).Info("Raising event with details",
-	// 	"OperatorNamespace", OperatorNamespace,
-	// 	"Kind", obj.GetObjectKind().GroupVersionKind().Kind,
-	// 	"APIVersion", obj.GetObjectKind().GroupVersionKind().GroupVersion().String(),
-	// 	"Name", obj.GetName(),
-	// 	"UID", obj.GetUID(),
-	// 	"EventType", eventType,
-	// 	"Reason", reason,
-	// 	"Message", message,
-	// )
-
 	r.Recorder.Event(eventRef, eventType, reason, message)
-}
-
-// ReadAllowedClusterRoles reads the allowed cluster roles from a configuration file.
-func ReadAllowedClusterRoles(filePath string, fileName string) ([]string, error) {
-	// Read the file content
-	data, err := os.ReadFile(fmt.Sprintf("%s/%s", filePath, fileName))
-	if err != nil {
-		return nil, fmt.Errorf("failed to read configuration file: %w", err)
-	}
-
-	var config struct {
-		AllowedClusterRoles []string `json:"allowedClusterRoles"`
-	}
-
-	// Parse JSON content into the struct
-	if err := json.Unmarshal(data, &config); err != nil {
-		return nil, fmt.Errorf("failed to parse configuration file: %w", err)
-	}
-
-	return config.AllowedClusterRoles, nil
 }
 
 // checks if a string is present in a slice.
@@ -243,7 +573,7 @@ func (r *JitRequestReconciler) createRbac(ctx context.Context, jitRequest *justi
 		Subjects: []rbacv1.Subject{
 			{
 				Kind: rbacv1.UserKind,
-				Name: jitRequest.Spec.User,
+				Name: jitRequest.Spec.Reporter,
 			},
 		},
 		RoleRef: rbacv1.RoleRef{
@@ -268,12 +598,21 @@ func (r *JitRequestReconciler) createRbac(ctx context.Context, jitRequest *justi
 	return nil
 }
 
-// Update JitRequest status with retry up to maxAttempts attempts
-func (r *JitRequestReconciler) updateStatus(ctx context.Context, jitRequest *justintimev1.JitRequest, status string, maxAttempts int) error {
+// Update JitRequest status and message with retry up to maxAttempts attempts
+func (r *JitRequestReconciler) updateStatus(
+	ctx context.Context,
+	jitRequest *justintimev1.JitRequest,
+	status,
+	message,
+	jiraTicket string,
+	maxAttempts int,
+) error {
 	attempts := 0
 	for {
 		attempts++
 		jitRequest.Status.State = status
+		jitRequest.Status.Message = message
+		jitRequest.Status.JiraTicket = jiraTicket
 		err := r.Status().Update(ctx, jitRequest)
 		if err == nil {
 			return nil // Update successful
@@ -292,10 +631,30 @@ func (r *JitRequestReconciler) updateStatus(ctx context.Context, jitRequest *jus
 	}
 }
 
+/*
+Predicate function to filter events for JitRequest objects
+Ignore StatusRejected update event for JitRequest if the same
+*/
+func jitRequestPredicate() predicate.Predicate {
+	return predicate.Funcs{
+		UpdateFunc: func(e event.UpdateEvent) bool {
+			oldJitRequest := e.ObjectOld.(*justintimev1.JitRequest)
+			newJitRequest := e.ObjectNew.(*justintimev1.JitRequest)
+
+			if oldJitRequest.Status.State == StatusRejected &&
+				newJitRequest.Status.State == StatusRejected {
+				return false
+			}
+
+			return newJitRequest.Status.State == StatusRejected
+		},
+	}
+}
+
 // SetupWithManager sets up the controller with the Manager.
 func (r *JitRequestReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&justintimev1.JitRequest{}).
+		For(&justintimev1.JitRequest{}, builder.WithPredicates(predicate.ResourceVersionChangedPredicate{}, jitRequestPredicate())).
 		Named("jitrequest").
 		Complete(r)
 }

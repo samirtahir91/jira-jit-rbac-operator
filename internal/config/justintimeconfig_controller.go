@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"sync"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -36,6 +37,7 @@ import (
 var (
 	ConfigCacheFilePath string
 	ConfigFile          = "config.json"
+	ConfigLock          sync.RWMutex
 )
 
 // JustInTimeConfigReconciler reconciles a JustInTimeConfig object
@@ -50,7 +52,21 @@ func (c *JustInTimeConfigReconciler) Reconcile(ctx context.Context, req ctrl.Req
 	l.Info("JustInTimeConfig reconciliation started", "request.name", req.Name)
 
 	cfg := configuration.NewJitRbacOperatorConfiguration(ctx, c.Client, req.Name)
-	l.Info("JustInTimeConfig", "allowed cluster roles", cfg.AllowedClusterRoles())
+	l.Info(
+		"JustInTimeConfig",
+		"allowed cluster roles",
+		cfg.AllowedClusterRoles(),
+		"jira reject transition id",
+		cfg.RejectedTransitionID(),
+		"jira project",
+		cfg.JiraProject(),
+		"jira issue type",
+		cfg.JiraIssueType(),
+		"jira approve transition id",
+		cfg.ApprovedTransitionID(),
+		"jira custom fields",
+		cfg.CustomFields(),
+	)
 
 	// cache config to file
 	if err := c.SaveConfigToFile(ctx, cfg, ConfigCacheFilePath, ConfigFile); err != nil {
@@ -73,12 +89,17 @@ func (c *JustInTimeConfigReconciler) SaveConfigToFile(ctx context.Context, cfg c
 		}
 	}
 
-	type ConfigData struct {
-		AllowedClusterRoles []string `json:"allowedClusterRoles"`
-	}
+	// common lock (config file is read by jitrequest controller reconciles)
+	ConfigLock.Lock()
+	defer ConfigLock.Unlock()
 
-	configData := ConfigData{
-		AllowedClusterRoles: cfg.AllowedClusterRoles(),
+	configData := configuration.Config{
+		AllowedClusterRolesField:  cfg.AllowedClusterRoles(),
+		RejectedTransitionIDField: cfg.RejectedTransitionID(),
+		JiraProjectField:          cfg.JiraProject(),
+		JiraIssueTypeField:        cfg.JiraIssueType(),
+		ApprovedTransitionIDField: cfg.ApprovedTransitionID(),
+		CustomFieldsField:         cfg.CustomFields(),
 	}
 
 	data, err := json.MarshalIndent(configData, "", "  ")
