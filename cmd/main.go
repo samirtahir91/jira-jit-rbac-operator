@@ -39,9 +39,9 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
-	justintimev1 "jit-rbac-operator/api/v1"
-	"jit-rbac-operator/internal/config"
-	"jit-rbac-operator/internal/controller"
+	justintimev1 "jira-jit-rbac-operator/api/v1"
+	"jira-jit-rbac-operator/internal/config"
+	"jira-jit-rbac-operator/internal/controller"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -75,7 +75,7 @@ func main() {
 		"If set, the metrics endpoint is served securely via HTTPS. Use --metrics-secure=false to use HTTP instead.")
 	flag.BoolVar(&enableHTTP2, "enable-http2", false,
 		"If set, HTTP/2 will be enabled for the metrics and webhook servers")
-	flag.StringVar(&configurationName, "configuration-name", "jit-rbac-operator-default", "name of the JustInTimeConfig")
+	flag.StringVar(&configurationName, "configuration-name", "jira-jit-rbac-operator-default", "name of the JustInTimeConfig")
 	// Read DEBUG_LOG from env var
 	debugLog, logVarErr := strconv.ParseBool(os.Getenv("DEBUG_LOG"))
 	if logVarErr != nil {

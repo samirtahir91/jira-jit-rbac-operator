@@ -5,8 +5,8 @@
 domain: samir.io
 layout:
 - go.kubebuilder.io/v4
-projectName: jit-rbac-operator
-repo: jit-rbac-operator
+projectName: jira-jit-rbac-operator
+repo: jira-jit-rbac-operator
 resources:
 - api:
     crdVersion: v1
@@ -15,7 +15,7 @@ resources:
   domain: samir.io
   group: justintime
   kind: JitRequest
-  path: jit-rbac-operator/api/v1
+  path: jira-jit-rbac-operator/api/v1
   version: v1
 - api:
     crdVersion: v1
@@ -24,6 +24,6 @@ resources:
   domain: samir.io
   group: justintime
   kind: JustInTimeConfig
-  path: jit-rbac-operator/api/v1
+  path: jira-jit-rbac-operator/api/v1
   version: v1
 version: "3"

@@ -25,7 +25,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"jit-rbac-operator/test/utils"
+	"jira-jit-rbac-operator/test/utils"
 )
 
 var (
@@ -43,7 +43,7 @@ var (
 
 	// projectImage is the name of the image which will be build and loaded
 	// with the code source changes to be tested.
-	projectImage = "example.com/jit-rbac-operator:v0.0.1"
+	projectImage = "example.com/jira-jit-rbac-operator:v0.0.1"
 )
 
 // TestE2E runs the end-to-end (e2e) test suite for the project. These tests execute in an isolated,
@@ -52,7 +52,7 @@ var (
 // CertManager and Prometheus.
 func TestE2E(t *testing.T) {
 	RegisterFailHandler(Fail)
-	_, _ = fmt.Fprintf(GinkgoWriter, "Starting jit-rbac-operator integration test suite\n")
+	_, _ = fmt.Fprintf(GinkgoWriter, "Starting jira-jit-rbac-operator integration test suite\n")
 	RunSpecs(t, "e2e suite")
 }
 

@@ -2,7 +2,7 @@ apiVersion: justintime.samir.io/v1
 kind: JustInTimeConfig
 metadata:
   labels:
-    app.kubernetes.io/name: jit-rbac-operator
+    app.kubernetes.io/name: jira-jit-rbac-operator
     app.kubernetes.io/managed-by: kustomize
   name: justintimeconfig-sample
 spec:

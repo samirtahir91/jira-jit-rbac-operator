@@ -33,7 +33,7 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	justintimev1 "jit-rbac-operator/api/v1"
+	justintimev1 "jira-jit-rbac-operator/api/v1"
 	// +kubebuilder:scaffold:imports
 )
 

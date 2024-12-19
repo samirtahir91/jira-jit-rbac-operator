@@ -43,9 +43,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
-	justintimev1 "jit-rbac-operator/api/v1"
-	"jit-rbac-operator/internal/config"
-	"jit-rbac-operator/pkg/configuration"
+	justintimev1 "jira-jit-rbac-operator/api/v1"
+	"jira-jit-rbac-operator/internal/config"
+	"jira-jit-rbac-operator/pkg/configuration"
 )
 
 var (

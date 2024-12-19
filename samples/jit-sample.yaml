@@ -15,7 +15,7 @@ spec:
 # apiVersion: justintime.samir.io/v1
 # kind: JustInTimeConfig
 # metadata:
-#   name: jit-rbac-operator-default
+#   name: jira-jit-rbac-operator-default
 # spec:
 #   allowedClusterRoles:
 #   - admin

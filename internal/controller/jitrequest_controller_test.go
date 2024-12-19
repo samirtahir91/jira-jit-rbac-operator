@@ -27,7 +27,7 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	justintimev1 "jit-rbac-operator/api/v1"
+	justintimev1 "jira-jit-rbac-operator/api/v1"
 )
 
 var _ = Describe("JitRequest Controller", func() {

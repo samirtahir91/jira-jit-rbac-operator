@@ -1,6 +1,6 @@
-# jit-rbac-operator - README UNDER CONSTRUCTION FOR JIRA INTEGRATIOM
+# jira-jit-rbac-operator - README UNDER CONSTRUCTION FOR JIRA INTEGRATIOM
 
-The `jit-rbac-operator` is a Kubernetes operator that creates short-lived rolebindings for users based on a JitRequest custom resource, it empowers self-service of Just-In-Time privileged access using Kubernetes RBAC.
+The `jira-jit-rbac-operator` is a Kubernetes operator that creates short-lived rolebindings for users based on a JitRequest custom resource, it empowers self-service of Just-In-Time privileged access using Kubernetes RBAC.
 
 ## Description
 
@@ -53,21 +53,21 @@ spec:
 A helm chart is generated using `make helm` when a new tag is pushed, i.e a release.
 
 You can pull the automatically built helm chart from this repos packages
-- See the [packages](https://github.com/samirtahir91/jit-rbac-operator/pkgs/container/jit-rbac-operator%2Fhelm-charts%2Fjit-rbac-operator)
+- See the [packages](https://github.com/samirtahir91/jira-jit-rbac-operator/pkgs/container/jira-jit-rbac-operator%2Fhelm-charts%2Fjira-jit-rbac-operator)
 - Pull with helm:
   - ```sh
-    helm pull oci://ghcr.io/samirtahir91/jit-rbac-operator/helm-charts/jit-rbac-operator --version <TAG>
+    helm pull oci://ghcr.io/samirtahir91/jira-jit-rbac-operator/helm-charts/jira-jit-rbac-operator --version <TAG>
     ```
 - Untar the chart and edit the `values.yaml` as required.
-- You can use the latest public image on DockerHub - `samirtahir91076/jit-rbac-operator:latest`
-  - See [tags](https://hub.docker.com/r/samirtahir91076/jit-rbac-operator/tags) 
+- You can use the latest public image on DockerHub - `samirtahir91076/jira-jit-rbac-operator:latest`
+  - See [tags](https://hub.docker.com/r/samirtahir91076/jira-jit-rbac-operator/tags) 
 - Deploy the chart with Helm.
 
 ### To Deploy on the cluster (from source and with Kustomize)
 **Build and push your image to the location specified by `IMG`:**
 
 ```sh
-make docker-build docker-push IMG=<some-registry>/jit-rbac-operator:tag
+make docker-build docker-push IMG=<some-registry>/jira-jit-rbac-operator:tag
 ```
 
 **Install the CRDs into the cluster:**
@@ -79,7 +79,7 @@ make install
 **Deploy the Manager to the cluster with the image specified by `IMG`:**
 
 ```sh
-make deploy IMG=<some-registry>/jit-rbac-operator:tag
+make deploy IMG=<some-registry>/jira-jit-rbac-operator:tag
 ```
 
 **Create instances of your solution**

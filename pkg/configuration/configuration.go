@@ -16,7 +16,7 @@ limitations under the License.
 
 package configuration
 
-import justintimev1 "jit-rbac-operator/api/v1"
+import justintimev1 "jira-jit-rbac-operator/api/v1"
 
 type Config struct {
 	AllowedClusterRolesField  []string                       `json:"allowedClusterRoles"`
