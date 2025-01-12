@@ -208,7 +208,7 @@ func (r *JitRequestReconciler) rejectInvalidRole(
 	return ctrl.Result{}, nil
 }
 
-// Pre-apprvoe the JitRequest, update the Jira ticke tand queue for start time
+// Pre-approve the JitRequest, update the Jira ticke and queue for start time
 func (r *JitRequestReconciler) preApproveRequest(
 	ctx context.Context,
 	l logr.Logger,
