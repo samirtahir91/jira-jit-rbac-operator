@@ -12,6 +12,7 @@ controllerManager:
         - ALL
     env:
       debugLog: "false"
+      jiraBaseUrl: http://my-jira-release.default.svc.cluster.local:80
     image:
       repository: samirtahir91076/jira-jit-rbac-operator
       tag: latest
