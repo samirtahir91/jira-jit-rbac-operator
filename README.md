@@ -1,13 +1,37 @@
-# jira-jit-rbac-operator - README UNDER CONSTRUCTION FOR JIRA INTEGRATIOM
+# jira-jit-rbac-operator 
 
-The `jira-jit-rbac-operator` is a Kubernetes operator that creates short-lived rolebindings for users based on a JitRequest custom resource, it empowers self-service of Just-In-Time privileged access using Kubernetes RBAC.
+The `jira-jit-rbac-operator` is a Kubernetes operator that creates short-lived rolebindings for users based on a JitRequest custom resource. It integrates with a configurable Jira Workflow, the operator submitts a Jira ticket in a Jira Project for approval by a Human before granting the role-binding for the requested time period. It empowers self-service of Just-In-Time privileged access using Kubernetes RBAC.
 
 ## Description
 
 ### Key Features
 - Uses a custom cluster scoped resource `JitRequest`.
-- Reads `user`, `clusterRole` and `namespace` `startTime` and `endTime` from a `JitRequest`.
-- Checks if the JitRequest's cluster role is allowed, from the `allowedClusterRoles` list defined in a `JustInTimeConfig` custom resource (set by admins/operators)
+- Reads `reporter`, `clusterRole`, `approver`, `productOwner`, `justification`, `namespace` `startTime` and `endTime` from a `JitRequest`.
+- Checks if the JitRequest's cluster role is allowed, from the `allowedClusterRoles` list defined in a `JustInTimeConfig` custom resource (set by admins/operators) and then pre-approves the request.
+- Submits the request as a Jira Ticket to a configured Jira Project with the details as per the `JitRequest` spec.
+- Requeues the `JitRequest` object for the defined `startTime` and checks the Jira Ticket for approval status
+- Creates the RoleBinding as requested if Jira Ticket is approved, rejects and cleans-up `JitRequest` if the Jira Ticket is not approved.
+- Deletes expired `JitRequests` and child objects (RoleBindings) at scheduled `endTime`.
+
+### Configuration for Jira
+The operator is confiuragble for a Jira project and Workflow using the `JustInTimeConfig` custom resource [sample](samples/jit-cfg.yaml)
+
+The workflow used is [here](samples/workflow.xml), you need to import/create an identical Workflow in your Jira Project (the IDs of fields etc are configurable as below).
+
+You must define these with the values according to your Jira Project and Workflow (to map the fields from your workflow to the opertor's config):
+  - Allowed cluster roles
+  - rejectedTransitionID
+  - jiraProject
+  - jiraIssueType
+  - approvedTransitionID
+  - customFields
+      - Reporter
+      - Approver
+      - ProductOwner
+      - Justification
+      - ClusterRole
+      - StartTime
+      - EndTime
 
 ### Logging and Debugging
 - By default, logs are JSON formatted, and log level is set to info and error.
@@ -23,6 +47,7 @@ The `jira-jit-rbac-operator` is a Kubernetes operator that creates short-lived r
 - Events are recorded for:
   - Rejected `JitRequests`
   - Failure to create a RoleBinding for a `JitRequest`
+  - Validation on allowed cluster roles
 
 ## Example `JitRequest` Resource
 
@@ -34,11 +59,14 @@ kind: JitRequest
 metadata:
   name: jitrequest-sample
 spec:
-  user: samir@foo.dev
+  reporter: test@foo.com
   clusterRole: edit
-  namespace: blue-team
-  startTime: 2024-12-05T09:00:00Z
-  endTime: 2024-12-06T10:00:00Z
+  approver: samirtahir91
+  productOwner: samirtahir91
+  justification: "need a jit now pls"
+  namespace: foo
+  startTime: 2024-12-09T14:31:00Z
+  endTime: 2024-12-09T14:31:10Z
 ```
 
 ## Getting Started
