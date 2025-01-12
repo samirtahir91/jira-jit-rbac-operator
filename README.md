@@ -14,7 +14,19 @@ The `jira-jit-rbac-operator` is a Kubernetes operator that creates short-lived r
 - Deletes expired `JitRequests` and child objects (RoleBindings) at scheduled `endTime`.
 
 ### Configuration for Jira
-The operator is confiuragble for a Jira project and Workflow using the `JustInTimeConfig` custom resource [sample](samples/jit-cfg.yaml)
+The operator is configurable for a Jira project and Workflow using the `JustInTimeConfig` custom resource [sample](samples/jit-cfg.yaml)
+
+You will need to create the custom fields in Jira to be used by the workflow:
+
+| Custom Field  | Type           |
+|---------------|----------------|
+| Reporter      | Text           |
+| Approver      | User Select    |
+| Product Owner | User Select    |
+| Justification | Text multiline |
+| Cluster Role  | Single select  |
+| Start Time    | Date and time  |
+| End Time      | Date and time  |
 
 The workflow used is [here](samples/workflow.xml), you need to [import](https://confluence.atlassian.com/display/ADMINJIRASERVER088/Using+XML+to+create+a+workflow)/create an identical Workflow in your Jira Project (the IDs of fields etc are configurable as below).
 
