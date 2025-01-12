@@ -1,0 +1,174 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: justintimeconfigs.justintime.samir.io
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.16.4
+  labels:
+  {{- include "jira-jit-rbac-operator.labels" . | nindent 4 }}
+spec:
+  group: justintime.samir.io
+  names:
+    kind: JustInTimeConfig
+    listKind: JustInTimeConfigList
+    plural: justintimeconfigs
+    shortNames:
+    - jitcfg
+    singular: justintimeconfig
+  scope: Cluster
+  versions:
+  - name: v1
+    schema:
+      openAPIV3Schema:
+        description: JustInTimeConfig is the Schema for the justintimeconfigs API.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: JustInTimeConfigSpec defines the desired state of JustInTimeConfig.
+            properties:
+              allowedClusterRoles:
+                description: Configure allowed cluster roles to bind for a JitRequest
+                items:
+                  type: string
+                type: array
+              approvedTransitionID:
+                type: string
+              customFields:
+                description: CustomFieldsSpec defines the specification for custom fields
+                properties:
+                  Approver:
+                    description: CustomField defines the the custom Jira fields to use
+                      in a Jira create payload
+                    properties:
+                      jiraCustomField:
+                        type: string
+                      type:
+                        type: string
+                    required:
+                    - jiraCustomField
+                    - type
+                    type: object
+                  ClusterRole:
+                    description: CustomField defines the the custom Jira fields to use
+                      in a Jira create payload
+                    properties:
+                      jiraCustomField:
+                        type: string
+                      type:
+                        type: string
+                    required:
+                    - jiraCustomField
+                    - type
+                    type: object
+                  EndTime:
+                    description: CustomField defines the the custom Jira fields to use
+                      in a Jira create payload
+                    properties:
+                      jiraCustomField:
+                        type: string
+                      type:
+                        type: string
+                    required:
+                    - jiraCustomField
+                    - type
+                    type: object
+                  Justification:
+                    description: CustomField defines the the custom Jira fields to use
+                      in a Jira create payload
+                    properties:
+                      jiraCustomField:
+                        type: string
+                      type:
+                        type: string
+                    required:
+                    - jiraCustomField
+                    - type
+                    type: object
+                  ProductOwner:
+                    description: CustomField defines the the custom Jira fields to use
+                      in a Jira create payload
+                    properties:
+                      jiraCustomField:
+                        type: string
+                      type:
+                        type: string
+                    required:
+                    - jiraCustomField
+                    - type
+                    type: object
+                  Reporter:
+                    description: CustomField defines the the custom Jira fields to use
+                      in a Jira create payload
+                    properties:
+                      jiraCustomField:
+                        type: string
+                      type:
+                        type: string
+                    required:
+                    - jiraCustomField
+                    - type
+                    type: object
+                  StartTime:
+                    description: CustomField defines the the custom Jira fields to use
+                      in a Jira create payload
+                    properties:
+                      jiraCustomField:
+                        type: string
+                      type:
+                        type: string
+                    required:
+                    - jiraCustomField
+                    - type
+                    type: object
+                required:
+                - Approver
+                - ClusterRole
+                - EndTime
+                - Justification
+                - ProductOwner
+                - Reporter
+                - StartTime
+                type: object
+              jiraIssueType:
+                type: string
+              jiraProject:
+                type: string
+              rejectedTransitionID:
+                type: string
+            required:
+            - allowedClusterRoles
+            - approvedTransitionID
+            - jiraIssueType
+            - jiraProject
+            - rejectedTransitionID
+            type: object
+          status:
+            description: JustInTimeConfigStatus defines the observed state of JustInTimeConfig.
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: []
+  storedVersions: []
