@@ -44,8 +44,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	justintimev1 "jira-jit-rbac-operator/api/v1"
+	v1 "jira-jit-rbac-operator/api/v1"
 	"jira-jit-rbac-operator/internal/config"
-	"jira-jit-rbac-operator/pkg/configuration"
 )
 
 var (
@@ -82,12 +82,12 @@ func (r *JitRequestReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	if err != nil {
 		return ctrl.Result{}, err
 	}
-	rejectedTransitionID := operatorConfig.RejectedTransitionID()
-	allowedClusterRoles := operatorConfig.AllowedClusterRoles()
-	jiraProject := operatorConfig.JiraProject()
-	jiraIssueType := operatorConfig.JiraIssueType()
-	approvedTransitionID := operatorConfig.ApprovedTransitionID()
-	customFieldsConfig := operatorConfig.CustomFields()
+	rejectedTransitionID := operatorConfig.RejectedTransitionID
+	allowedClusterRoles := operatorConfig.AllowedClusterRoles
+	jiraProject := operatorConfig.JiraProject
+	jiraIssueType := operatorConfig.JiraIssueType
+	approvedTransitionID := operatorConfig.ApprovedTransitionID
+	customFieldsConfig := operatorConfig.CustomFields
 
 	l.Info("Got JitRequest", "Requestor", jitRequest.Spec.Reporter, "Role", jitRequest.Spec.ClusterRole, "Namespace", jitRequest.Spec.Namespace)
 
@@ -132,7 +132,7 @@ func (r *JitRequestReconciler) handleFetchError(
 }
 
 // Read operator configuration from config file
-func (r *JitRequestReconciler) readConfigFromFile(filePath string, fileName string) (configuration.Configuration, error) {
+func (r *JitRequestReconciler) readConfigFromFile(filePath string, fileName string) (*v1.JustInTimeConfigSpec, error) {
 	// common lock for concurrent reads
 	config.ConfigLock.RLock()
 	defer config.ConfigLock.RUnlock()
@@ -142,7 +142,7 @@ func (r *JitRequestReconciler) readConfigFromFile(filePath string, fileName stri
 		return nil, fmt.Errorf("failed to read configuration file: %w", err)
 	}
 
-	var config configuration.Config
+	var config v1.JustInTimeConfigSpec
 	if err := json.Unmarshal(data, &config); err != nil {
 		return nil, fmt.Errorf("failed to parse configuration file: %w", err)
 	}

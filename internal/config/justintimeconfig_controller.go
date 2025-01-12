@@ -31,6 +31,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	justintimev1 "jira-jit-rbac-operator/api/v1"
+	v1 "jira-jit-rbac-operator/api/v1"
 	"jira-jit-rbac-operator/pkg/configuration"
 )
 
@@ -93,13 +94,13 @@ func (c *JustInTimeConfigReconciler) SaveConfigToFile(ctx context.Context, cfg c
 	ConfigLock.Lock()
 	defer ConfigLock.Unlock()
 
-	configData := configuration.Config{
-		AllowedClusterRolesField:  cfg.AllowedClusterRoles(),
-		RejectedTransitionIDField: cfg.RejectedTransitionID(),
-		JiraProjectField:          cfg.JiraProject(),
-		JiraIssueTypeField:        cfg.JiraIssueType(),
-		ApprovedTransitionIDField: cfg.ApprovedTransitionID(),
-		CustomFieldsField:         cfg.CustomFields(),
+	configData := v1.JustInTimeConfigSpec{
+		AllowedClusterRoles:  cfg.AllowedClusterRoles(),
+		RejectedTransitionID: cfg.RejectedTransitionID(),
+		JiraProject:          cfg.JiraProject(),
+		JiraIssueType:        cfg.JiraIssueType(),
+		ApprovedTransitionID: cfg.ApprovedTransitionID(),
+		CustomFields:         cfg.CustomFields(),
 	}
 
 	data, err := json.MarshalIndent(configData, "", "  ")
