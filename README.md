@@ -16,7 +16,7 @@ The `jira-jit-rbac-operator` is a Kubernetes operator that creates short-lived r
 ### Configuration for Jira
 The operator is confiuragble for a Jira project and Workflow using the `JustInTimeConfig` custom resource [sample](samples/jit-cfg.yaml)
 
-The workflow used is [here](samples/workflow.xml), you need to [import](https://confluence.atlassian.com/adminjiraserver088/configuring-projects/working-with-workflows/advanced-workflow-configuration/using-xml-to-create-a-workflow)/create an identical Workflow in your Jira Project (the IDs of fields etc are configurable as below).
+The workflow used is [here](samples/workflow.xml), you need to [import](https://confluence.atlassian.com/display/ADMINJIRASERVER088/Using+XML+to+create+a+workflow)/create an identical Workflow in your Jira Project (the IDs of fields etc are configurable as below).
 
 
 You must define these with the values according to your Jira Project and Workflow (to map the fields from your workflow to the opertor's config):
