@@ -18,7 +18,6 @@ The operator is confiuragble for a Jira project and Workflow using the `JustInTi
 
 The workflow used is [here](samples/workflow.xml), you need to [import](https://confluence.atlassian.com/display/ADMINJIRASERVER088/Using+XML+to+create+a+workflow)/create an identical Workflow in your Jira Project (the IDs of fields etc are configurable as below).
 
-
 You must define these with the values according to your Jira Project and Workflow (to map the fields from your workflow to the opertor's config):
   - Allowed cluster roles
   - rejectedTransitionID
@@ -78,6 +77,15 @@ spec:
 - kubectl version v1.22.0+.
 - Access to a Kubernetes v1.22.0+ cluster.
 
+### Create Jira API Token Secret
+- Create an account and PAT (Personal Access Token) for the operator to use.
+- Create a secret for the PAT
+```sh
+kubectl -n jira-jit-rbac-operator-system create secret generic \
+  jira-credentials \
+  --from-literal=api-token=<PERSONAL ACCESS TOKEN>
+```
+
 ### To deploy with Helm using public Docker image
 A helm chart is generated using `make helm`.
 - Edit the `values.yaml` as required.
@@ -125,8 +133,7 @@ Current integration tests cover the scenarios:
 export JIT_RBAC_OPERATOR_CONFIG_PATH=/tmp/jit-test/
 export OPERATOR_NAMESPACE=default
 export JIRA_BASE_URL=http://127.0.0.1
-export JIRA_USERNAME=jira-rbac-operator
-export JIRA_API_TOKEN=foobar
+export JIRA_API_TOKEN=<PERSONAL ACESS TOKEN>
 # run
 make run
 ```

@@ -173,14 +173,13 @@ func main() {
 	if customJiraBaseUrl := os.Getenv("JIRA_BASE_URL"); customJiraBaseUrl != "" {
 		jiraBaseUrl = customJiraBaseUrl
 	}
-	jiraUsername := os.Getenv("JIRA_USERNAME")
 	jiraPassword := os.Getenv("JIRA_API_TOKEN")
 	jiraClient, err := jira.New(nil, jiraBaseUrl)
 	if err != nil {
 		setupLog.Error(err, "unable to start jira client")
 		os.Exit(1)
 	}
-	jiraClient.Auth.SetBasicAuth(jiraUsername, jiraPassword)
+	jiraClient.Auth.SetBearerToken(jiraPassword)
 
 	if err = (&controller.JitRequestReconciler{
 		JiraClient: jiraClient,
