@@ -78,15 +78,12 @@ spec:
 - Access to a Kubernetes v1.22.0+ cluster.
 
 ### To deploy with Helm using public Docker image
-A helm chart is generated using `make helm` when a new tag is pushed, i.e a release.
-
-You can pull the automatically built helm chart from this repos packages
-- See the [packages](https://github.com/samirtahir91/jira-jit-rbac-operator/pkgs/container/jira-jit-rbac-operator%2Fhelm-charts%2Fjira-jit-rbac-operator)
-- Pull with helm:
-  - ```sh
-    helm pull oci://ghcr.io/samirtahir91/jira-jit-rbac-operator/helm-charts/jira-jit-rbac-operator --version <TAG>
-    ```
-- Untar the chart and edit the `values.yaml` as required.
+A helm chart is generated using `make helm`.
+- Edit the `values.yaml` as required.
+```sh
+cd charts/jira-jit-rbac-operator
+helm upgrade --install -n jira-jit-rbac-operator-system <release_name> . --create-namespace
+```
 - You can use the latest public image on DockerHub - `samirtahir91076/jira-jit-rbac-operator:latest`
   - See [tags](https://hub.docker.com/r/samirtahir91076/jira-jit-rbac-operator/tags) 
 - Deploy the chart with Helm.
