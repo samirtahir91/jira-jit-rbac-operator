@@ -47,6 +47,7 @@ spec:
                   type: string
                 type: array
               approvedTransitionID:
+                description: The workflow transition ID for an approved ticket
                 type: string
               customFields:
                 additionalProperties:
@@ -61,16 +62,20 @@ spec:
                   - jiraCustomField
                   - type
                   type: object
+                description: Optional additional fields to map to the ticket and enforce
+                  on a JitRequest's jiraFields
                 type: object
               jiraIssueType:
+                description: The Jira issue type
                 type: string
               jiraProject:
+                description: The Jira project key
                 type: string
               rejectedTransitionID:
+                description: The workflow transition ID for rejecting a ticket
                 type: string
               requiredFields:
-                description: RequiredFieldsSpec defines the specification for required
-                  fields
+                description: Required fields for the Jira ticket
                 properties:
                   ClusterRole:
                     description: Cluster role field in Jira
@@ -110,6 +115,10 @@ spec:
                 - EndTime
                 - StartTime
                 type: object
+              workflowApprovedStatus:
+                description: The value of the approved state for a Jira ticket, i.e.
+                  "Approved"
+                type: string
             required:
             - allowedClusterRoles
             - approvedTransitionID
@@ -118,6 +127,7 @@ spec:
             - jiraProject
             - rejectedTransitionID
             - requiredFields
+            - workflowApprovedStatus
             type: object
           status:
             description: JustInTimeConfigStatus defines the observed state of JustInTimeConfig.

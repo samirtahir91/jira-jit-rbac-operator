@@ -6,6 +6,7 @@ spec:
   allowedClusterRoles:
     - admin
     - edit
+  workflowApprovedStatus: "Approved"
   rejectedTransitionID: "21"
   jiraProject: IAM
   jiraIssueType: Access Request

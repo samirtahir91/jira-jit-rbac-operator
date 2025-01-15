@@ -81,6 +81,7 @@ func (r *JitRequestReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	if err != nil {
 		return ctrl.Result{}, err
 	}
+	jiraWorkflowApproveStatus := operatorConfig.JiraWorkflowApproveStatus
 	rejectedTransitionID := operatorConfig.RejectedTransitionID
 	allowedClusterRoles := operatorConfig.AllowedClusterRoles
 	jiraProject := operatorConfig.JiraProject
@@ -98,7 +99,7 @@ func (r *JitRequestReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	case "":
 		return r.handleNewRequest(ctx, l, jitRequest, allowedClusterRoles, jiraProject, jiraIssueType, customFieldsConfig, requiredFieldsConfig)
 	case StatusPreApproved:
-		return r.handlePreApproved(ctx, l, jitRequest, approvedTransitionID)
+		return r.handlePreApproved(ctx, l, jitRequest, approvedTransitionID, jiraWorkflowApproveStatus)
 	case StatusSucceeded:
 		return r.handleCleaup(ctx, l, jitRequest)
 	default:
@@ -263,7 +264,7 @@ func (r *JitRequestReconciler) handlePreApproved(
 	ctx context.Context,
 	l logr.Logger,
 	jitRequest *justintimev1.JitRequest,
-	approvedTransitionID string,
+	approvedTransitionID, jiraWorkflowApproveStatus string,
 ) (ctrl.Result, error) {
 	// check if needs to be re-queued
 	startTime := jitRequest.Spec.StartTime.Time
@@ -275,7 +276,7 @@ func (r *JitRequestReconciler) handlePreApproved(
 	}
 
 	jiraTicket := jitRequest.Status.JiraTicket
-	if err := r.getJiraApproval(ctx, jitRequest); err != nil {
+	if err := r.getJiraApproval(ctx, jitRequest, jiraWorkflowApproveStatus); err != nil {
 		l.Error(err, StatusRejected, "jira ticket", jiraTicket)
 		if err := r.updateStatus(ctx, jitRequest, StatusRejected, "Jira ticket has not been approved", jiraTicket, 3); err != nil {
 			return ctrl.Result{}, err
@@ -367,7 +368,7 @@ func (r *JitRequestReconciler) completeJiraTicket(ctx context.Context, jitReques
 }
 
 // Check Jira ticket is approved
-func (r *JitRequestReconciler) getJiraApproval(ctx context.Context, jitRequest *justintimev1.JitRequest) error {
+func (r *JitRequestReconciler) getJiraApproval(ctx context.Context, jitRequest *justintimev1.JitRequest, jiraWorkflowApproveStatus string) error {
 	l := log.FromContext(ctx)
 	l.Info("Checking Jira ticket approval", "jit request", jitRequest)
 
@@ -380,8 +381,8 @@ func (r *JitRequestReconciler) getJiraApproval(ctx context.Context, jitRequest *
 		return err
 	}
 
-	// Check if the issue status is "Approved"
-	if issue.Fields.Status.Name == "Approved" {
+	// Check if the issue status is Approved
+	if issue.Fields.Status.Name == jiraWorkflowApproveStatus {
 		l.Info("Jira ticket is approved", "jiraTicket", jiraIssueKey)
 		return nil
 	}

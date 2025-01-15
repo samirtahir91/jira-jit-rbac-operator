@@ -40,11 +40,12 @@ func NewJitRbacOperatorConfiguration(ctx context.Context, client client.Client, 
 			if apierrors.IsNotFound(err) {
 				return &justintimev1.JustInTimeConfig{
 					Spec: justintimev1.JustInTimeConfigSpec{
-						AllowedClusterRoles:  []string{"edit"},
-						RejectedTransitionID: "21",
-						JiraProject:          "IAM",
-						JiraIssueType:        "Access Request",
-						ApprovedTransitionID: "41",
+						AllowedClusterRoles:       []string{"edit"},
+						JiraWorkflowApproveStatus: "Approved",
+						RejectedTransitionID:      "21",
+						JiraProject:               "IAM",
+						JiraIssueType:             "Access Request",
+						ApprovedTransitionID:      "41",
 						RequiredFields: &justintimev1.RequiredFieldsSpec{
 							StartTime:   justintimev1.CustomFieldSettings{Type: "date", JiraCustomField: "customfield_10118"},
 							EndTime:     justintimev1.CustomFieldSettings{Type: "date", JiraCustomField: "customfield_10119"},
@@ -67,6 +68,10 @@ func NewJitRbacOperatorConfiguration(ctx context.Context, client client.Client, 
 
 func (c *jitRbacOperatorConfiguration) AllowedClusterRoles() []string {
 	return c.retrievalFn().Spec.AllowedClusterRoles
+}
+
+func (c *jitRbacOperatorConfiguration) JiraWorkflowApproveStatus() string {
+	return c.retrievalFn().Spec.JiraWorkflowApproveStatus
 }
 
 func (c *jitRbacOperatorConfiguration) RejectedTransitionID() string {

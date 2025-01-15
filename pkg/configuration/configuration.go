@@ -20,6 +20,7 @@ import justintimev1 "jira-jit-rbac-operator/api/v1"
 
 type Configuration interface {
 	AllowedClusterRoles() []string
+	JiraWorkflowApproveStatus() string
 	RejectedTransitionID() string
 	JiraProject() string
 	JiraIssueType() string

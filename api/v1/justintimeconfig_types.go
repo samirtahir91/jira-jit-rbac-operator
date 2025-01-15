@@ -23,13 +23,21 @@ import (
 // JustInTimeConfigSpec defines the desired state of JustInTimeConfig.
 type JustInTimeConfigSpec struct {
 	// Configure allowed cluster roles to bind for a JitRequest
-	AllowedClusterRoles  []string                       `json:"allowedClusterRoles" validate:"required"`
-	RejectedTransitionID string                         `json:"rejectedTransitionID" validate:"required"`
-	JiraProject          string                         `json:"jiraProject" validate:"required"`
-	JiraIssueType        string                         `json:"jiraIssueType" validate:"required"`
-	ApprovedTransitionID string                         `json:"approvedTransitionID" validate:"required"`
-	RequiredFields       *RequiredFieldsSpec            `json:"requiredFields"`
-	CustomFields         map[string]CustomFieldSettings `json:"customFields"`
+	AllowedClusterRoles []string `json:"allowedClusterRoles" validate:"required"`
+	// The value of the approved state for a Jira ticket, i.e. "Approved"
+	JiraWorkflowApproveStatus string `json:"workflowApprovedStatus" validate:"required"`
+	// The workflow transition ID for rejecting a ticket
+	RejectedTransitionID string `json:"rejectedTransitionID" validate:"required"`
+	// The Jira project key
+	JiraProject string `json:"jiraProject" validate:"required"`
+	// The Jira issue type
+	JiraIssueType string `json:"jiraIssueType" validate:"required"`
+	// The workflow transition ID for an approved ticket
+	ApprovedTransitionID string `json:"approvedTransitionID" validate:"required"`
+	// Required fields for the Jira ticket
+	RequiredFields *RequiredFieldsSpec `json:"requiredFields"`
+	// Optional additional fields to map to the ticket and enforce on a JitRequest's jiraFields
+	CustomFields map[string]CustomFieldSettings `json:"customFields"`
 }
 
 // RequiredFieldsSpec defines the specification for required fields
