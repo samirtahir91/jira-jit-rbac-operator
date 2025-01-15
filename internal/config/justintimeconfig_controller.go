@@ -101,6 +101,7 @@ func (c *JustInTimeConfigReconciler) SaveConfigToFile(ctx context.Context, cfg c
 		JiraIssueType:        cfg.JiraIssueType(),
 		ApprovedTransitionID: cfg.ApprovedTransitionID(),
 		CustomFields:         cfg.CustomFields(),
+		RequiredFields:       cfg.RequiredFields(),
 	}
 
 	data, err := json.MarshalIndent(configData, "", "  ")

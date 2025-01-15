@@ -58,9 +58,6 @@ spec:
           spec:
             description: JitRequestSpec defines the desired state of JitRequest.
             properties:
-              approver:
-                description: Approver's user mail
-                type: string
               clusterRole:
                 description: Role to bind
                 type: string
@@ -70,17 +67,13 @@ spec:
                   ISO 8601 format
                 format: date-time
                 type: string
-              justification:
-                description: Justification
-                type: string
+              jiraFields:
+                additionalProperties:
+                  type: string
+                description: Custom Jira workflow fields
+                type: object
               namespace:
                 description: Namespace to bind role and user
-                type: string
-              productOwner:
-                description: Product Owner's user email
-                type: string
-              reporter:
-                description: Requestor's username/email
                 type: string
               startTime:
                 description: |-
@@ -88,15 +81,16 @@ spec:
                   ISO 8601 format
                 format: date-time
                 type: string
+              userID:
+                description: The requestor's username/email to bind Role Binding to
+                type: string
             required:
-            - approver
             - clusterRole
             - endTime
-            - justification
+            - jiraFields
             - namespace
-            - productOwner
-            - reporter
             - startTime
+            - userID
             type: object
           status:
             description: JitRequestStatus defines the observed state of JitRequest.

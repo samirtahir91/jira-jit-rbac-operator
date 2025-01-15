@@ -22,14 +22,8 @@ import (
 
 // JitRequestSpec defines the desired state of JitRequest.
 type JitRequestSpec struct {
-	// Requestor's username/email
-	Reporter string `json:"reporter" validate:"required"`
-	// Approver's user mail
-	Approver string `json:"approver" validate:"required"`
-	// Product Owner's user email
-	ProductOwner string `json:"productOwner" validate:"required"`
-	// Justification
-	Justification string `json:"justification" validate:"required"`
+	// The requestor's username/email to bind Role Binding to
+	Reporter string `json:"userID" validate:"required"`
 	// Role to bind
 	ClusterRole string `json:"clusterRole" validate:"required"`
 	// Namespace to bind role and user
@@ -40,6 +34,8 @@ type JitRequestSpec struct {
 	// End time for the JIT access, i.e. "2024-12-04T22:00:00Z"
 	// ISO 8601 format
 	EndTime metav1.Time `json:"endTime" validate:"required"`
+	// Custom Jira workflow fields
+	JiraFields map[string]string `json:"jiraFields"`
 }
 
 // JitRequestStatus defines the observed state of JitRequest.

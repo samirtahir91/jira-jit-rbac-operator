@@ -21,7 +21,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"reflect"
 	"time"
 
 	jira "github.com/ctreminiom/go-atlassian/v2/jira/v2"
@@ -88,6 +87,7 @@ func (r *JitRequestReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	jiraIssueType := operatorConfig.JiraIssueType
 	approvedTransitionID := operatorConfig.ApprovedTransitionID
 	customFieldsConfig := operatorConfig.CustomFields
+	requiredFieldsConfig := operatorConfig.RequiredFields
 
 	l.Info("Got JitRequest", "Requestor", jitRequest.Spec.Reporter, "Role", jitRequest.Spec.ClusterRole, "Namespace", jitRequest.Spec.Namespace)
 
@@ -96,7 +96,7 @@ func (r *JitRequestReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	case StatusRejected:
 		return r.handleRejected(ctx, l, jitRequest, rejectedTransitionID)
 	case "":
-		return r.handleNewRequest(ctx, l, jitRequest, allowedClusterRoles, jiraProject, jiraIssueType, customFieldsConfig)
+		return r.handleNewRequest(ctx, l, jitRequest, allowedClusterRoles, jiraProject, jiraIssueType, customFieldsConfig, requiredFieldsConfig)
 	case StatusPreApproved:
 		return r.handlePreApproved(ctx, l, jitRequest, approvedTransitionID)
 	case StatusSucceeded:
@@ -157,10 +157,14 @@ func (r *JitRequestReconciler) handleRejected(
 	jitRequest *justintimev1.JitRequest,
 	rejectedTransitionID string,
 ) (ctrl.Result, error) {
-	if err := r.rejectJiraTicket(ctx, jitRequest, rejectedTransitionID); err != nil {
-		l.Error(err, "failed to reject jira ticket")
-		return ctrl.Result{}, err
+	// Reject jira ticket
+	if jitRequest.Status.JiraTicket != "Skipped" {
+		if err := r.rejectJiraTicket(ctx, jitRequest, rejectedTransitionID); err != nil {
+			l.Error(err, "failed to reject jira ticket")
+			return ctrl.Result{}, err
+		}
 	}
+	// Delete JitRequest
 	if err := r.deleteJitRequest(ctx, jitRequest); err != nil {
 		l.Error(err, "failed to delete JitRequest")
 		return ctrl.Result{}, err
@@ -176,12 +180,18 @@ func (r *JitRequestReconciler) handleNewRequest(
 	allowedClusterRoles []string,
 	jiraProject,
 	jiraIssueType string,
-	customFieldsConfig *justintimev1.CustomFieldsSpec,
+	customFieldsConfig map[string]v1.CustomFieldSettings,
+	requiredFieldsConfig *v1.RequiredFieldsSpec,
 ) (ctrl.Result, error) {
-	jiraIssueKey, err := r.createJiraTicket(ctx, jitRequest, jiraProject, jiraIssueType, customFieldsConfig)
+	jiraIssueKey, err := r.createJiraTicket(ctx, jitRequest, jiraProject, jiraIssueType, customFieldsConfig, requiredFieldsConfig)
 	if err != nil {
 		l.Error(err, "failed to createJiraTicket")
 		return ctrl.Result{}, err
+	}
+
+	// Return if missing jira field
+	if jiraIssueKey == "Skipped" {
+		return ctrl.Result{}, nil
 	}
 
 	// check cluster role is allowed
@@ -226,7 +236,7 @@ func (r *JitRequestReconciler) preApproveRequest(
 
 		// update jira with comment
 		jiraTicket := jitRequest.Status.JiraTicket
-		comment := jitRequest.Status.Message
+		comment := (jitRequest.Status.Message + "\nNamespace: " + jitRequest.Spec.Namespace)
 		if err := r.updateJiraTicket(ctx, jiraTicket, comment); err != nil {
 			return ctrl.Result{}, err
 		}
@@ -379,18 +389,84 @@ func (r *JitRequestReconciler) getJiraApproval(ctx context.Context, jitRequest *
 	return fmt.Errorf("failed on jira approval")
 }
 
+// Helper function for createJiraTicket to build custom fields in jira ticket payload
+func addCustomField(ctx context.Context, customFields *models.CustomFields, fieldType, jiraCustomField, value string) {
+	l := log.FromContext(ctx)
+
+	switch fieldType {
+	case "text", "date":
+		if err := customFields.Text(jiraCustomField, value); err != nil {
+			l.Error(err, "failed to add custom field", "field", jiraCustomField)
+		}
+	case "select":
+		if err := customFields.Select(jiraCustomField, value); err != nil {
+			l.Error(err, "failed to add custom field", "field", jiraCustomField)
+		}
+	case "user":
+		userField := map[string]interface{}{
+			"name": value,
+		}
+		if err := customFields.Raw(jiraCustomField, userField); err != nil {
+			l.Error(err, "failed to add custom field", "field", jiraCustomField)
+		}
+	default:
+		l.Error(fmt.Errorf("unknown custom field type"), jiraCustomField, "type", fieldType)
+	}
+}
+
 // Create a jira ticket for a JitRequest
 func (r *JitRequestReconciler) createJiraTicket(
 	ctx context.Context,
 	jitRequest *justintimev1.JitRequest,
 	jiraProject,
 	jiraIssueType string,
-	customFieldsConfig *justintimev1.CustomFieldsSpec,
+	customFieldsConfig map[string]v1.CustomFieldSettings,
+	requiredFieldsConfig *v1.RequiredFieldsSpec,
 ) (string, error) {
 	l := log.FromContext(ctx)
 
 	l.Info("Creating Jira ticket", "jiraTicket", jitRequest)
 
+	customFields := models.CustomFields{}
+
+	// Add custom fields from JustInTimeConfig spec
+	for fieldName, settings := range customFieldsConfig {
+		value, exists := jitRequest.Spec.JiraFields[fieldName]
+		if !exists {
+			// missing field, reject
+			errMsg := fmt.Errorf("missing custom field: %s", fieldName)
+			if err := r.updateStatus(ctx, jitRequest, StatusRejected, errMsg.Error(), "Skipped", 3); err != nil {
+				l.Error(err, "failed to update status to Rejected")
+				return "Skipped", nil
+			}
+		}
+		addCustomField(ctx, &customFields, settings.Type, settings.JiraCustomField, value)
+	}
+
+	// Add required fields for StartTime, EndTime, ClusterRole
+	requiredFields := map[string]string{
+		"StartTime":   jitRequest.Spec.StartTime.Format("2006-01-02T15:04:05.000-0700"),
+		"EndTime":     jitRequest.Spec.EndTime.Format("2006-01-02T15:04:05.000-0700"),
+		"ClusterRole": jitRequest.Spec.ClusterRole,
+	}
+
+	for fieldName, value := range requiredFields {
+		var settings justintimev1.CustomFieldSettings
+		switch fieldName {
+		case "StartTime":
+			settings = requiredFieldsConfig.StartTime
+		case "EndTime":
+			settings = requiredFieldsConfig.EndTime
+		case "ClusterRole":
+			settings = requiredFieldsConfig.ClusterRole
+		default:
+			l.Error(fmt.Errorf("unknown required field"), "field", fieldName)
+			continue
+		}
+		addCustomField(ctx, &customFields, settings.Type, settings.JiraCustomField, value)
+	}
+
+	// payload for new jira ticket
 	payload := models.IssueSchemeV2{
 		Fields: &models.IssueFieldsSchemeV2{
 			Summary: fmt.Sprintf("Automated JIT request for %s", jitRequest.Spec.Reporter),
@@ -403,61 +479,9 @@ func (r *JitRequestReconciler) createJiraTicket(
 		},
 	}
 
-	customFields := models.CustomFields{}
-	specValue := reflect.ValueOf(jitRequest.Spec)
-
-	// Use reflection to iterate over the fields of CustomFieldsSpec
-	customFieldsValue := reflect.ValueOf(customFieldsConfig).Elem()
-	customFieldsType := customFieldsValue.Type()
-
-	for i := 0; i < customFieldsValue.NumField(); i++ {
-		field := customFieldsValue.Field(i)
-		fieldName := customFieldsType.Field(i).Name
-
-		specField := specValue.FieldByName(fieldName)
-		if !specField.IsValid() {
-			l.Error(fmt.Errorf("unknown custom field name"), "name", fieldName)
-			continue
-		}
-
-		var value string
-		switch specField.Kind() {
-		case reflect.String:
-			value = specField.String()
-		case reflect.Struct:
-			if specField.Type() == reflect.TypeOf(metav1.Time{}) {
-				value = specField.Interface().(metav1.Time).Format("2006-01-02T15:04:05.000-0700")
-			}
-		default:
-			l.Error(fmt.Errorf("unsupported field type"), "name", fieldName, "type", specField.Kind())
-			continue
-		}
-
-		settings := field.Interface().(justintimev1.CustomFieldSettings)
-		switch settings.Type {
-		case "text":
-			if err := customFields.Text(settings.JiraCustomField, value); err != nil {
-				l.Error(err, "failed to add text custom field", "field", settings.JiraCustomField)
-			}
-		case "select":
-			if err := customFields.Select(settings.JiraCustomField, value); err != nil {
-				l.Error(err, "failed to add select custom field", "field", settings.JiraCustomField)
-			}
-		case "user":
-			userField := map[string]interface{}{
-				"name": value,
-			}
-			if err := customFields.Raw(settings.JiraCustomField, userField); err != nil {
-				l.Error(err, "failed to add user custom field", "field", settings.JiraCustomField)
-			}
-		case "date":
-			if err := customFields.Text(settings.JiraCustomField, value); err != nil {
-				l.Error(err, "failed to add date custom field", "field", settings.JiraCustomField)
-			}
-		default:
-			l.Error(fmt.Errorf("unknown custom field type"), "field", settings.JiraCustomField, "type", settings.Type)
-		}
-	}
+	// Debug payload and customFields
+	// l.Info("Jira Issue Payload", "payload", payload)
+	// l.Info("Custom Fields Data", "customFields", customFields)
 
 	createdIssue, _, err := r.JiraClient.Issue.Create(context.Background(), &payload, &customFields)
 	if err != nil {

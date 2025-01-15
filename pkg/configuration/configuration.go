@@ -24,5 +24,6 @@ type Configuration interface {
 	JiraProject() string
 	JiraIssueType() string
 	ApprovedTransitionID() string
-	CustomFields() *justintimev1.CustomFieldsSpec
+	CustomFields() map[string]justintimev1.CustomFieldSettings
+	RequiredFields() *justintimev1.RequiredFieldsSpec
 }

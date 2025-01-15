@@ -23,26 +23,34 @@ import (
 // JustInTimeConfigSpec defines the desired state of JustInTimeConfig.
 type JustInTimeConfigSpec struct {
 	// Configure allowed cluster roles to bind for a JitRequest
-	AllowedClusterRoles  []string          `json:"allowedClusterRoles" validate:"required"`
-	RejectedTransitionID string            `json:"rejectedTransitionID" validate:"required"`
-	JiraProject          string            `json:"jiraProject" validate:"required"`
-	JiraIssueType        string            `json:"jiraIssueType" validate:"required"`
-	ApprovedTransitionID string            `json:"approvedTransitionID" validate:"required"`
-	CustomFields         *CustomFieldsSpec `json:"customFields,omitempty"`
+	AllowedClusterRoles  []string                       `json:"allowedClusterRoles" validate:"required"`
+	RejectedTransitionID string                         `json:"rejectedTransitionID" validate:"required"`
+	JiraProject          string                         `json:"jiraProject" validate:"required"`
+	JiraIssueType        string                         `json:"jiraIssueType" validate:"required"`
+	ApprovedTransitionID string                         `json:"approvedTransitionID" validate:"required"`
+	RequiredFields       *RequiredFieldsSpec            `json:"requiredFields"`
+	CustomFields         map[string]CustomFieldSettings `json:"customFields"`
+}
+
+// RequiredFieldsSpec defines the specification for required fields
+type RequiredFieldsSpec struct {
+	// Cluster role field in Jira
+	ClusterRole CustomFieldSettings `json:"ClusterRole" validate:"required"`
+	// StartTime field in Jira
+	StartTime CustomFieldSettings `json:"StartTime" validate:"required"`
+	// EndTime field in Jira
+	EndTime CustomFieldSettings `json:"EndTime" validate:"required"`
 }
 
 // CustomFieldsSpec defines the specification for custom fields
-type CustomFieldsSpec struct {
-	Reporter      CustomFieldSettings `json:"Reporter" validate:"required"`
-	Approver      CustomFieldSettings `json:"Approver" validate:"required"`
-	ProductOwner  CustomFieldSettings `json:"ProductOwner" validate:"required"`
-	Justification CustomFieldSettings `json:"Justification" validate:"required"`
-	ClusterRole   CustomFieldSettings `json:"ClusterRole" validate:"required"`
-	StartTime     CustomFieldSettings `json:"StartTime" validate:"required"`
-	EndTime       CustomFieldSettings `json:"EndTime" validate:"required"`
-}
+// type CustomFieldsSpec struct {
+// 	Reporter      CustomFieldSettings `json:"Reporter" validate:"required"`
+// 	Approver      CustomFieldSettings `json:"Approver" validate:"required"`
+// 	ProductOwner  CustomFieldSettings `json:"ProductOwner" validate:"required"`
+// 	Justification CustomFieldSettings `json:"Justification" validate:"required"`
+// }
 
-// CustomField defines the the custom Jira fields to use in a Jira create payload
+// CustomField defines the custom Jira fields to use in a Jira create payload
 type CustomFieldSettings struct {
 	Type            string `json:"type" validate:"required"`
 	JiraCustomField string `json:"jiraCustomField" validate:"required"`
