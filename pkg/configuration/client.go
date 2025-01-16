@@ -40,19 +40,21 @@ func NewJitRbacOperatorConfiguration(ctx context.Context, client client.Client, 
 			if apierrors.IsNotFound(err) {
 				return &justintimev1.JustInTimeConfig{
 					Spec: justintimev1.JustInTimeConfigSpec{
-						AllowedClusterRoles:  []string{"edit"},
-						RejectedTransitionID: "21",
-						JiraProject:          "IAM",
-						JiraIssueType:        "Access Request",
-						ApprovedTransitionID: "41",
-						CustomFields: &justintimev1.CustomFieldsSpec{
-							Reporter:      justintimev1.CustomFieldSettings{Type: "text", JiraCustomField: "customfield_10113"},
-							Approver:      justintimev1.CustomFieldSettings{Type: "user", JiraCustomField: "customfield_10114"},
-							ProductOwner:  justintimev1.CustomFieldSettings{Type: "user", JiraCustomField: "customfield_10115"},
-							Justification: justintimev1.CustomFieldSettings{Type: "text", JiraCustomField: "customfield_10116"},
-							ClusterRole:   justintimev1.CustomFieldSettings{Type: "select", JiraCustomField: "customfield_10117"},
-							StartTime:     justintimev1.CustomFieldSettings{Type: "date", JiraCustomField: "customfield_10118"},
-							EndTime:       justintimev1.CustomFieldSettings{Type: "date", JiraCustomField: "customfield_10119"},
+						AllowedClusterRoles:       []string{"edit"},
+						JiraWorkflowApproveStatus: "Approved",
+						RejectedTransitionID:      "21",
+						JiraProject:               "IAM",
+						JiraIssueType:             "Access Request",
+						ApprovedTransitionID:      "41",
+						RequiredFields: &justintimev1.RequiredFieldsSpec{
+							StartTime:   justintimev1.CustomFieldSettings{Type: "date", JiraCustomField: "customfield_10118"},
+							EndTime:     justintimev1.CustomFieldSettings{Type: "date", JiraCustomField: "customfield_10119"},
+							ClusterRole: justintimev1.CustomFieldSettings{Type: "date", JiraCustomField: "customfield_10117"},
+						},
+						CustomFields: map[string]justintimev1.CustomFieldSettings{
+							"Approver":      {Type: "user", JiraCustomField: "customfield_10114"},
+							"ProductOwner":  {Type: "user", JiraCustomField: "customfield_10115"},
+							"Justification": {Type: "text", JiraCustomField: "customfield_10116"},
 						},
 					},
 				}
@@ -66,6 +68,10 @@ func NewJitRbacOperatorConfiguration(ctx context.Context, client client.Client, 
 
 func (c *jitRbacOperatorConfiguration) AllowedClusterRoles() []string {
 	return c.retrievalFn().Spec.AllowedClusterRoles
+}
+
+func (c *jitRbacOperatorConfiguration) JiraWorkflowApproveStatus() string {
+	return c.retrievalFn().Spec.JiraWorkflowApproveStatus
 }
 
 func (c *jitRbacOperatorConfiguration) RejectedTransitionID() string {
@@ -84,6 +90,10 @@ func (c *jitRbacOperatorConfiguration) ApprovedTransitionID() string {
 	return c.retrievalFn().Spec.ApprovedTransitionID
 }
 
-func (c *jitRbacOperatorConfiguration) CustomFields() *justintimev1.CustomFieldsSpec {
+func (c *jitRbacOperatorConfiguration) CustomFields() map[string]justintimev1.CustomFieldSettings {
 	return c.retrievalFn().Spec.CustomFields
+}
+
+func (c *jitRbacOperatorConfiguration) RequiredFields() *justintimev1.RequiredFieldsSpec {
+	return c.retrievalFn().Spec.RequiredFields
 }

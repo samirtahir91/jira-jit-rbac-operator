@@ -6,29 +6,28 @@ spec:
   allowedClusterRoles:
     - admin
     - edit
+  workflowApprovedStatus: "Approved"
   rejectedTransitionID: "21"
   jiraProject: IAM
   jiraIssueType: Access Request
   approvedTransitionID: "41"
-  customFields:
-    Reporter:
-      type: "text"
-      jiraCustomField: "customfield_10113"
-    Approver:
-      type: "user"
-      jiraCustomField: "customfield_10114"
-    ProductOwner:
-      type: "user"
-      jiraCustomField: "customfield_10115"
-    Justification:
-      type: "text"
-      jiraCustomField: "customfield_10116"
+  requiredFields:
     ClusterRole:
       type: "select"
-      jiraCustomField: "customfield_10117"
+      jiraCustomField: "customfield_10115"
     StartTime:
       type: "date"
-      jiraCustomField: "customfield_10118"
+      jiraCustomField: "customfield_10200"
     EndTime:
       type: "date"
-      jiraCustomField: "customfield_10119"
+      jiraCustomField: "customfield_10201"
+  customFields:
+    Approver:
+      type: "user"
+      jiraCustomField: "customfield_10112"
+    ProductOwner:
+      type: "user"
+      jiraCustomField: "customfield_10113"
+    Justification:
+      type: "text"
+      jiraCustomField: "customfield_10114"

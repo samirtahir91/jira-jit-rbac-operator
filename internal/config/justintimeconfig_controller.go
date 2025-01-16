@@ -57,6 +57,8 @@ func (c *JustInTimeConfigReconciler) Reconcile(ctx context.Context, req ctrl.Req
 		"JustInTimeConfig",
 		"allowed cluster roles",
 		cfg.AllowedClusterRoles(),
+		"jira workflow approved name",
+		cfg.JiraWorkflowApproveStatus(),
 		"jira reject transition id",
 		cfg.RejectedTransitionID(),
 		"jira project",
@@ -67,6 +69,8 @@ func (c *JustInTimeConfigReconciler) Reconcile(ctx context.Context, req ctrl.Req
 		cfg.ApprovedTransitionID(),
 		"jira custom fields",
 		cfg.CustomFields(),
+		"jira required fields",
+		cfg.RequiredFields(),
 	)
 
 	// cache config to file
@@ -95,12 +99,14 @@ func (c *JustInTimeConfigReconciler) SaveConfigToFile(ctx context.Context, cfg c
 	defer ConfigLock.Unlock()
 
 	configData := v1.JustInTimeConfigSpec{
-		AllowedClusterRoles:  cfg.AllowedClusterRoles(),
-		RejectedTransitionID: cfg.RejectedTransitionID(),
-		JiraProject:          cfg.JiraProject(),
-		JiraIssueType:        cfg.JiraIssueType(),
-		ApprovedTransitionID: cfg.ApprovedTransitionID(),
-		CustomFields:         cfg.CustomFields(),
+		AllowedClusterRoles:       cfg.AllowedClusterRoles(),
+		JiraWorkflowApproveStatus: cfg.JiraWorkflowApproveStatus(),
+		RejectedTransitionID:      cfg.RejectedTransitionID(),
+		JiraProject:               cfg.JiraProject(),
+		JiraIssueType:             cfg.JiraIssueType(),
+		ApprovedTransitionID:      cfg.ApprovedTransitionID(),
+		CustomFields:              cfg.CustomFields(),
+		RequiredFields:            cfg.RequiredFields(),
 	}
 
 	data, err := json.MarshalIndent(configData, "", "  ")
