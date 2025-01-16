@@ -3,6 +3,7 @@
 The `jira-jit-rbac-operator` is a Kubernetes operator that creates short-lived rolebindings for users based on a JitRequest custom resource. It integrates with a configurable Jira Workflow, the operator submitts a Jira ticket in a Jira Project for approval by a Human before granting the role-binding for the requested time period. It empowers self-service of Just-In-Time privileged access using Kubernetes RBAC.
 
 ## ToDo
+- Update readme on latest spec
 - Optional OPA policy or Validating Webhook that compares with JustInTimeConfig customFields.
 
 ## Description
@@ -17,6 +18,22 @@ The `jira-jit-rbac-operator` is a Kubernetes operator that creates short-lived r
 - Deletes expired `JitRequests` and child objects (RoleBindings) at scheduled `endTime`.
 
 ### Configuration for Jira
+
+#### Create Jira API Token Secret
+
+- Create a Jira account for the operator and generate a PAT (personal access token).
+- Grant the account permission to modify reporters on the target Jira project.
+- Grant the account permission to create/update issues in the target Jira project.
+- Create a secret for the PAT
+
+```sh
+kubectl -n jira-jit-rbac-operator-system create secret generic \
+  jira-credentials \
+  --from-literal=api-token=<PERSONAL ACCESS TOKEN>
+```
+
+#### Project and Workflow configuration
+
 The operator is configurable for a Jira project and Workflow using the `JustInTimeConfig` custom resource [sample](samples/jit-cfg.yaml)
 
 You will need to create the custom fields in Jira to be used by the workflow:
@@ -91,15 +108,6 @@ spec:
 - docker version 17.03+.
 - kubectl version v1.22.0+.
 - Access to a Kubernetes v1.22.0+ cluster.
-
-### Create Jira API Token Secret
-- Create an account and PAT (Personal Access Token) for the operator to use.
-- Create a secret for the PAT
-```sh
-kubectl -n jira-jit-rbac-operator-system create secret generic \
-  jira-credentials \
-  --from-literal=api-token=<PERSONAL ACCESS TOKEN>
-```
 
 ### To deploy with Helm using public Docker image
 A helm chart is generated using `make helm`.
