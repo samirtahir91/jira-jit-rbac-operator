@@ -20,7 +20,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	jira "github.com/ctreminiom/go-atlassian/v2/jira/v2"
@@ -230,14 +232,22 @@ func (r *JitRequestReconciler) preApproveRequest(
 	if startTime.After(time.Now()) {
 		// update status and event
 		r.raiseEvent(jitRequest, "Normal", StatusPreApproved, fmt.Sprintf("ClusterRole '%s' is allowed", jitRequest.Spec.ClusterRole))
-		if err := r.updateStatus(ctx, jitRequest, StatusPreApproved, "Pre-approval - Access will be granted at start time pending human approval(s)", jiraIssueKey, 3); err != nil {
+		if err := r.updateStatus(ctx, jitRequest, StatusPreApproved, "*Pre-approval* - Access will be granted at start time pending human approval(s)", jiraIssueKey, 3); err != nil {
 			l.Error(err, "failed to update status to Pre-Approved")
 			return ctrl.Result{}, err
 		}
 
-		// update jira with comment
+		// build comment
 		jiraTicket := jitRequest.Status.JiraTicket
-		comment := (jitRequest.Status.Message + "\nNamespace: " + jitRequest.Spec.Namespace)
+		comment := jitRequest.Status.Message + "\n*Namespace*: " + jitRequest.Spec.Namespace + "\n*User:* " + jitRequest.Spec.Reporter
+
+		// check if additionalUsers defined and add to comment
+		additionalUsers := jitRequest.Spec.AdditionUserEmails
+		if len(additionalUsers) > 0 {
+			additionalUsersStr := "- " + strings.Join(additionalUsers, "\n- ")
+			comment += "\n*Additional Users:*\n" + additionalUsersStr
+		}
+		// add comment
 		if err := r.updateJiraTicket(ctx, jiraTicket, comment); err != nil {
 			return ctrl.Result{}, err
 		}
@@ -285,7 +295,7 @@ func (r *JitRequestReconciler) handlePreApproved(
 	}
 
 	l.Info("Creating role binding")
-	if err := r.createRbac(ctx, jitRequest); err != nil {
+	if err := r.createRoleBinding(ctx, jitRequest); err != nil {
 		l.Error(err, "failed to create rbac for JIT request")
 		r.raiseEvent(jitRequest, "Warning", "FailedRBAC", fmt.Sprintf("Error: %s", err))
 		return ctrl.Result{}, err
@@ -329,9 +339,10 @@ func (r *JitRequestReconciler) updateJiraTicket(ctx context.Context, jiraTicket,
 	payload := &models.CommentPayloadSchemeV2{
 		Body: comment,
 	}
-	_, _, err := r.JiraClient.Issue.Comment.Add(context.Background(), jiraTicket, payload, nil)
+	_, response, err := r.JiraClient.Issue.Comment.Add(context.Background(), jiraTicket, payload, nil)
 	if err != nil {
-		l.Error(err, "failed to add comment to jira ticket", "jiraTicket", jiraTicket)
+		body := response.Bytes.String()
+		l.Error(err, "failed to add comment to jira ticket", "jiraTicket", jiraTicket, "response", body)
 		return err
 	}
 
@@ -358,9 +369,10 @@ func (r *JitRequestReconciler) completeJiraTicket(ctx context.Context, jitReques
 			},
 		},
 	}
-	_, err := r.JiraClient.Issue.Move(context.Background(), jiraTicket, approvedTransitionID, options)
+	response, err := r.JiraClient.Issue.Move(context.Background(), jiraTicket, approvedTransitionID, options)
 	if err != nil {
-		l.Error(err, "failed to transition jira ticket to completed")
+		body := response.Bytes.String()
+		l.Error(err, "failed to transition jira ticket to completed", "response", body)
 		return err
 	}
 
@@ -375,9 +387,10 @@ func (r *JitRequestReconciler) getJiraApproval(ctx context.Context, jitRequest *
 	jiraIssueKey := jitRequest.Status.JiraTicket
 
 	// Fetch the Jira issue details
-	issue, _, err := r.JiraClient.Issue.Get(ctx, jiraIssueKey, nil, nil)
+	issue, response, err := r.JiraClient.Issue.Get(ctx, jiraIssueKey, nil, nil)
 	if err != nil {
-		l.Error(err, "failed to fetch Jira ticket details", "jiraTicket", jiraIssueKey)
+		body := response.Bytes.String()
+		l.Error(err, "failed to fetch Jira ticket details", "jiraTicket", jiraIssueKey, "response", body)
 		return err
 	}
 
@@ -388,6 +401,37 @@ func (r *JitRequestReconciler) getJiraApproval(ctx context.Context, jitRequest *
 	}
 
 	return fmt.Errorf("failed on jira approval")
+}
+
+// Get and return account ID for a Jira user by email - assumes single email per user and gets 1st result
+func (r *JitRequestReconciler) getNameByEmail(email string) (string, error) {
+
+	type User struct {
+		Name string `json:"name"`
+	}
+
+	// RAW endpoint
+	apiEndpoint := fmt.Sprintf("rest/api/2/user/search?username=%s", email)
+	request, err := r.JiraClient.NewRequest(context.Background(), http.MethodGet, apiEndpoint, "", nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to find account name for reporter email: %w", err)
+	}
+
+	var users []User
+	response, err := r.JiraClient.Call(request, &users)
+	if err != nil {
+		body := response.Bytes.String()
+		return "", fmt.Errorf("failed to find account name for reporter email: %w, response: %s", err, body)
+	}
+
+	// check if any users were found
+	if len(users) == 0 {
+		return "", fmt.Errorf("no users found with email: %s", email)
+	}
+
+	// get the account name
+	accountId := users[0].Name
+	return accountId, nil
 }
 
 // Helper function for createJiraTicket to build custom fields in jira ticket payload
@@ -467,6 +511,13 @@ func (r *JitRequestReconciler) createJiraTicket(
 		addCustomField(ctx, &customFields, settings.Type, settings.JiraCustomField, value)
 	}
 
+	// Get Jira account ID from reporter email
+	reporterAccountName, err := r.getNameByEmail(jitRequest.Spec.Reporter)
+	if err != nil {
+		l.Error(err, "failed to create Jira ticket")
+		return "", err
+	}
+
 	// payload for new jira ticket
 	payload := models.IssueSchemeV2{
 		Fields: &models.IssueFieldsSchemeV2{
@@ -477,6 +528,11 @@ func (r *JitRequestReconciler) createJiraTicket(
 			IssueType: &models.IssueTypeScheme{
 				Name: jiraIssueType,
 			},
+			// Set reporter as per userID
+			Reporter: &models.UserScheme{
+				Name: reporterAccountName,
+			},
+			Labels: []string{"jira-jit-rbac-operator", "automated_jit_request"},
 		},
 	}
 
@@ -484,9 +540,10 @@ func (r *JitRequestReconciler) createJiraTicket(
 	// l.Info("Jira Issue Payload", "payload", payload)
 	// l.Info("Custom Fields Data", "customFields", customFields)
 
-	createdIssue, _, err := r.JiraClient.Issue.Create(context.Background(), &payload, &customFields)
+	createdIssue, response, err := r.JiraClient.Issue.Create(context.Background(), &payload, &customFields)
 	if err != nil {
-		l.Error(err, "failed to create Jira ticket")
+		body := response.Bytes.String()
+		l.Error(err, "failed to create Jira ticket", "response", body, "payload", payload, "customFields", customFields)
 		return "", err
 	}
 
@@ -514,9 +571,10 @@ func (r *JitRequestReconciler) rejectJiraTicket(ctx context.Context, jitRequest 
 			},
 		},
 	}
-	_, err := r.JiraClient.Issue.Move(context.Background(), jiraTicket, rejectedTransitionID, options)
+	response, err := r.JiraClient.Issue.Move(context.Background(), jiraTicket, rejectedTransitionID, options)
 	if err != nil {
-		l.Error(err, "failed to transition jira ticket")
+		body := response.Bytes.String()
+		l.Error(err, "failed to transition jira ticket", "response", body)
 		return err
 	}
 
@@ -586,7 +644,24 @@ func isAlreadyExistsError(err error) bool {
 }
 
 // Create rolebinding for a JitRequest
-func (r *JitRequestReconciler) createRbac(ctx context.Context, jitRequest *justintimev1.JitRequest) error {
+func (r *JitRequestReconciler) createRoleBinding(ctx context.Context, jitRequest *justintimev1.JitRequest) error {
+
+	// Add reporter to subject
+	subjects := []rbacv1.Subject{
+		{
+			Kind: rbacv1.UserKind,
+			Name: jitRequest.Spec.Reporter,
+		},
+	}
+
+	// Add additional user emails as subjects if defined
+	for _, email := range jitRequest.Spec.AdditionUserEmails {
+		subjects = append(subjects, rbacv1.Subject{
+			Kind: rbacv1.UserKind,
+			Name: email,
+		})
+	}
+
 	roleBinding := &rbacv1.RoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      fmt.Sprintf("%s-jit", jitRequest.Name),
@@ -595,12 +670,7 @@ func (r *JitRequestReconciler) createRbac(ctx context.Context, jitRequest *justi
 				"justintime.samir.io/expiry": jitRequest.Spec.EndTime.Time.Format(time.RFC3339),
 			},
 		},
-		Subjects: []rbacv1.Subject{
-			{
-				Kind: rbacv1.UserKind,
-				Name: jitRequest.Spec.Reporter,
-			},
-		},
+		Subjects: subjects,
 		RoleRef: rbacv1.RoleRef{
 			APIGroup: rbacv1.GroupName,
 			Kind:     "ClusterRole",

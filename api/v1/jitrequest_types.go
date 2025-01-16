@@ -23,17 +23,19 @@ import (
 // JitRequestSpec defines the desired state of JitRequest.
 type JitRequestSpec struct {
 	// The requestor's username/email to bind Role Binding to
-	Reporter string `json:"userID" validate:"required"`
+	Reporter string `json:"userEmail"`
+	// Additional user emails to add to the Jira request
+	AdditionUserEmails []string `json:"additionalEmails,omitempty"`
 	// Role to bind
-	ClusterRole string `json:"clusterRole" validate:"required"`
+	ClusterRole string `json:"clusterRole"`
 	// Namespace to bind role and user
-	Namespace string `json:"namespace" validate:"required"`
+	Namespace string `json:"namespace"`
 	// Start time for the JIT access, i.e. "2024-12-04T21:00:00Z"
 	// ISO 8601 format
-	StartTime metav1.Time `json:"startTime" validate:"required"`
+	StartTime metav1.Time `json:"startTime"`
 	// End time for the JIT access, i.e. "2024-12-04T22:00:00Z"
 	// ISO 8601 format
-	EndTime metav1.Time `json:"endTime" validate:"required"`
+	EndTime metav1.Time `json:"endTime"`
 	// Custom Jira workflow fields
 	JiraFields map[string]string `json:"jiraFields"`
 }

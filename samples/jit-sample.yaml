@@ -3,10 +3,13 @@ kind: JitRequest
 metadata:
   name: jitrequest-sample
 spec:
-  userID: test@foo.com
+  userEmail: dev@dev.com
+  additionalEmails:
+    - "dev2@dev.com"
+    - "dev3@dev.com"
   namespace: foo
-  startTime: 2025-01-15T16:08:00Z
-  endTime: 2025-01-15T16:09:10Z
+  startTime: 2025-01-16T21:50:10Z
+  endTime: 2025-01-16T21:51:10Z
   clusterRole: edit
   jiraFields:
     Approver: admin
