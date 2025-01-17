@@ -38,6 +38,20 @@ type JustInTimeConfigSpec struct {
 	RequiredFields *RequiredFieldsSpec `json:"requiredFields"`
 	// Optional additional fields to map to the ticket and enforce on a JitRequest's jiraFields
 	CustomFields map[string]CustomFieldSettings `json:"customFields"`
+	// Optional labels to add to jira tickets
+	Labels map[string]string `json:"labels,omitempty"`
+	// Environment and cluster name to add as label to jira tickets
+	Environment *EnvironmentSpec `json:"environment"`
+	// Optional text to add to jira ticket comment
+	AdditionalCommentText string `json:"additionalCommentText"`
+}
+
+// EnvironmentSpec defines the specification for the environment
+type EnvironmentSpec struct {
+	// Environmnt name
+	Environment string `json:"environment"`
+	// StartTime field in Jira
+	Cluster string `json:"cluster"`
 }
 
 // RequiredFieldsSpec defines the specification for required fields
