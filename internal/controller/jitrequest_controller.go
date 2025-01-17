@@ -238,20 +238,23 @@ func (r *JitRequestReconciler) preApproveRequest(
 	if startTime.After(time.Now()) {
 		// update status and event
 		r.raiseEvent(jitRequest, "Normal", StatusPreApproved, fmt.Sprintf("ClusterRole '%s' is allowed", jitRequest.Spec.ClusterRole))
-		if err := r.updateStatus(ctx, jitRequest, StatusPreApproved, "*Pre-approval* - Access will be granted at start time pending human approval(s)", jiraIssueKey, 3); err != nil {
+		// status
+		jitRequestStatusMsg := "Pre-approval - Access will be granted at start time pending human approval(s)"
+		if err := r.updateStatus(ctx, jitRequest, StatusPreApproved, jitRequestStatusMsg, jiraIssueKey, 3); err != nil {
 			l.Error(err, "failed to update status to Pre-Approved")
 			return ctrl.Result{}, err
 		}
 
 		// build comment
+		jiraMessage := fmt.Sprintf("{color:#00875a}*%s*{color}", jitRequestStatusMsg)
 		jiraTicket := jitRequest.Status.JiraTicket
-		comment := jitRequest.Status.Message + "\n*Namespace*: " + jitRequest.Spec.Namespace + "\n*User:* " + jitRequest.Spec.Reporter
+		comment := jiraMessage + "\n|*Namespace(s)*|" + jitRequest.Spec.Namespace + "|\n|*User*|" + jitRequest.Spec.Reporter + "|"
 
 		// check if additionalUsers defined and add to comment
 		additionalUsers := jitRequest.Spec.AdditionUserEmails
 		if len(additionalUsers) > 0 {
-			additionalUsersStr := "- " + strings.Join(additionalUsers, "\n- ")
-			comment += "\n*Additional Users:*\n" + additionalUsersStr
+			additionalUsersStr := strings.Join(additionalUsers, "\n")
+			comment += "\n|*Additional Users*|" + additionalUsersStr + "|"
 		}
 
 		// add additional comments if exists
@@ -367,7 +370,7 @@ func (r *JitRequestReconciler) completeJiraTicket(ctx context.Context, jitReques
 
 	// Add a comment to the Jira issue
 	jiraTicket := jitRequest.Status.JiraTicket
-	comment := fmt.Sprintf("Completed - %s", jitRequest.Status.Message)
+	comment := fmt.Sprintf("{color:#00875a}*Completed - %s*{color}", jitRequest.Status.Message)
 	l.Info("Compelting Jira ticket", "jiraTicket", jiraTicket)
 	if err := r.updateJiraTicket(ctx, jiraTicket, comment); err != nil {
 		return err
@@ -581,7 +584,7 @@ func (r *JitRequestReconciler) rejectJiraTicket(ctx context.Context, jitRequest 
 
 	// Add a comment to the Jira issue
 	jiraTicket := jitRequest.Status.JiraTicket
-	comment := fmt.Sprintf("Rejected - %s", jitRequest.Status.Message)
+	comment := fmt.Sprintf("{color:#de350b}*Rejected - %s*{color}", jitRequest.Status.Message)
 	l.Info("Rejecting Jira ticket", "jiraTicket", jiraTicket)
 	if err := r.updateJiraTicket(ctx, jiraTicket, comment); err != nil {
 		return err
