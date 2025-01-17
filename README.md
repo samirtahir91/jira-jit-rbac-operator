@@ -3,6 +3,9 @@
 The `jira-jit-rbac-operator` is a Kubernetes operator that creates short-lived rolebindings for users based on a JitRequest custom resource. It integrates with a configurable Jira Workflow, the operator submitts a Jira ticket in a Jira Project for approval by a Human before granting the role-binding for the requested time period. It empowers self-service of Just-In-Time privileged access using Kubernetes RBAC.
 
 ## ToDo
+- Add labels optional cfg
+- add cluster details auto
+- add optional Meta data cfg comment
 - Update readme on latest spec
 - Optional OPA policy or Validating Webhook that compares with JustInTimeConfig customFields.
 
