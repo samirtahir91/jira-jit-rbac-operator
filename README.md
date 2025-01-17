@@ -4,7 +4,8 @@ The `jira-jit-rbac-operator` is a Kubernetes operator that creates short-lived r
 
 ## ToDo
 - Add labels optional cfg
-- add cluster details auto
+- add cluster and env details to comments
+  - labels
 - add optional Meta data cfg comment
 - Update readme on latest spec
 - Optional OPA policy or Validating Webhook that compares with JustInTimeConfig customFields.
