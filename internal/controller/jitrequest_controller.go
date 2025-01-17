@@ -91,6 +91,9 @@ func (r *JitRequestReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	approvedTransitionID := operatorConfig.ApprovedTransitionID
 	customFieldsConfig := operatorConfig.CustomFields
 	requiredFieldsConfig := operatorConfig.RequiredFields
+	ticketLabels := operatorConfig.Labels
+	targetEnvironment := operatorConfig.Environment
+	additionalComments := operatorConfig.AdditionalCommentText
 
 	l.Info("Got JitRequest", "Requestor", jitRequest.Spec.Reporter, "Role", jitRequest.Spec.ClusterRole, "Namespace", jitRequest.Spec.Namespace)
 
@@ -99,7 +102,7 @@ func (r *JitRequestReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	case StatusRejected:
 		return r.handleRejected(ctx, l, jitRequest, rejectedTransitionID)
 	case "":
-		return r.handleNewRequest(ctx, l, jitRequest, allowedClusterRoles, jiraProject, jiraIssueType, customFieldsConfig, requiredFieldsConfig)
+		return r.handleNewRequest(ctx, l, jitRequest, allowedClusterRoles, jiraProject, jiraIssueType, customFieldsConfig, requiredFieldsConfig, ticketLabels, targetEnvironment, additionalComments)
 	case StatusPreApproved:
 		return r.handlePreApproved(ctx, l, jitRequest, approvedTransitionID, jiraWorkflowApproveStatus)
 	case StatusSucceeded:
@@ -185,8 +188,11 @@ func (r *JitRequestReconciler) handleNewRequest(
 	jiraIssueType string,
 	customFieldsConfig map[string]v1.CustomFieldSettings,
 	requiredFieldsConfig *v1.RequiredFieldsSpec,
+	ticketLabels []string,
+	targetEnvironment *v1.EnvironmentSpec,
+	additionalComments string,
 ) (ctrl.Result, error) {
-	jiraIssueKey, err := r.createJiraTicket(ctx, jitRequest, jiraProject, jiraIssueType, customFieldsConfig, requiredFieldsConfig)
+	jiraIssueKey, err := r.createJiraTicket(ctx, jitRequest, jiraProject, jiraIssueType, customFieldsConfig, requiredFieldsConfig, ticketLabels, targetEnvironment)
 	if err != nil {
 		l.Error(err, "failed to createJiraTicket")
 		return ctrl.Result{}, err
@@ -202,7 +208,7 @@ func (r *JitRequestReconciler) handleNewRequest(
 		return r.rejectInvalidRole(ctx, l, jitRequest, jiraIssueKey)
 	}
 
-	return r.preApproveRequest(ctx, l, jitRequest, jiraIssueKey)
+	return r.preApproveRequest(ctx, l, jitRequest, jiraIssueKey, additionalComments)
 }
 
 // Reject an invalid cluster role
@@ -226,7 +232,7 @@ func (r *JitRequestReconciler) preApproveRequest(
 	ctx context.Context,
 	l logr.Logger,
 	jitRequest *justintimev1.JitRequest,
-	jiraIssueKey string,
+	jiraIssueKey, additionalComments string,
 ) (ctrl.Result, error) {
 	startTime := jitRequest.Spec.StartTime.Time
 	if startTime.After(time.Now()) {
@@ -247,6 +253,12 @@ func (r *JitRequestReconciler) preApproveRequest(
 			additionalUsersStr := "- " + strings.Join(additionalUsers, "\n- ")
 			comment += "\n*Additional Users:*\n" + additionalUsersStr
 		}
+
+		// add additional comments if exists
+		if additionalComments != "" {
+			comment += "\n\n*Additional Info:*\n" + additionalComments
+		}
+
 		// add comment
 		if err := r.updateJiraTicket(ctx, jiraTicket, comment); err != nil {
 			return ctrl.Result{}, err
@@ -467,6 +479,8 @@ func (r *JitRequestReconciler) createJiraTicket(
 	jiraIssueType string,
 	customFieldsConfig map[string]v1.CustomFieldSettings,
 	requiredFieldsConfig *v1.RequiredFieldsSpec,
+	ticketLabels []string,
+	targetEnvironment *v1.EnvironmentSpec,
 ) (string, error) {
 	l := log.FromContext(ctx)
 
@@ -518,6 +532,16 @@ func (r *JitRequestReconciler) createJiraTicket(
 		return "", err
 	}
 
+	targetCluster := targetEnvironment.Cluster
+	targetEnv := targetEnvironment.Environment
+	combinedLabels := append(
+		ticketLabels,
+		"jira-jit-rbac-operator",
+		"automated_jit_request",
+		targetCluster,
+		targetEnv,
+	)
+
 	// payload for new jira ticket
 	payload := models.IssueSchemeV2{
 		Fields: &models.IssueFieldsSchemeV2{
@@ -532,7 +556,7 @@ func (r *JitRequestReconciler) createJiraTicket(
 			Reporter: &models.UserScheme{
 				Name: reporterAccountName,
 			},
-			Labels: []string{"jira-jit-rbac-operator", "automated_jit_request"},
+			Labels: combinedLabels,
 		},
 	}
 

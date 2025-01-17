@@ -46,6 +46,14 @@ func NewJitRbacOperatorConfiguration(ctx context.Context, client client.Client, 
 						JiraProject:               "IAM",
 						JiraIssueType:             "Access Request",
 						ApprovedTransitionID:      "41",
+						AdditionalCommentText:     "config: default",
+						Labels: []string{
+							"default-config",
+						},
+						Environment: &justintimev1.EnvironmentSpec{
+							Environment: "dev-test",
+							Cluster:     "minikube",
+						},
 						RequiredFields: &justintimev1.RequiredFieldsSpec{
 							StartTime:   justintimev1.CustomFieldSettings{Type: "date", JiraCustomField: "customfield_10118"},
 							EndTime:     justintimev1.CustomFieldSettings{Type: "date", JiraCustomField: "customfield_10119"},
@@ -64,6 +72,18 @@ func NewJitRbacOperatorConfiguration(ctx context.Context, client client.Client, 
 
 		return config
 	}}
+}
+
+func (c *jitRbacOperatorConfiguration) Environment() *justintimev1.EnvironmentSpec {
+	return c.retrievalFn().Spec.Environment
+}
+
+func (c *jitRbacOperatorConfiguration) AdditionalCommentText() string {
+	return c.retrievalFn().Spec.AdditionalCommentText
+}
+
+func (c *jitRbacOperatorConfiguration) Labels() []string {
+	return c.retrievalFn().Spec.Labels
 }
 
 func (c *jitRbacOperatorConfiguration) AllowedClusterRoles() []string {

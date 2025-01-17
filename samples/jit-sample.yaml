@@ -8,8 +8,8 @@ spec:
     - "dev2@dev.com"
     - "dev3@dev.com"
   namespace: foo
-  startTime: 2025-01-16T21:50:10Z
-  endTime: 2025-01-16T21:51:10Z
+  startTime: 2025-01-17T07:55:10Z
+  endTime: 2025-01-17T07:56:10Z
   clusterRole: edit
   jiraFields:
     Approver: admin

@@ -71,6 +71,12 @@ func (c *JustInTimeConfigReconciler) Reconcile(ctx context.Context, req ctrl.Req
 		cfg.CustomFields(),
 		"jira required fields",
 		cfg.RequiredFields(),
+		"environment",
+		cfg.Environment(),
+		"labels",
+		cfg.Labels(),
+		"additional comments",
+		cfg.AdditionalCommentText(),
 	)
 
 	// cache config to file
@@ -107,6 +113,9 @@ func (c *JustInTimeConfigReconciler) SaveConfigToFile(ctx context.Context, cfg c
 		ApprovedTransitionID:      cfg.ApprovedTransitionID(),
 		CustomFields:              cfg.CustomFields(),
 		RequiredFields:            cfg.RequiredFields(),
+		Environment:               cfg.Environment(),
+		Labels:                    cfg.Labels(),
+		AdditionalCommentText:     cfg.AdditionalCommentText(),
 	}
 
 	data, err := json.MarshalIndent(configData, "", "  ")
