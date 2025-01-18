@@ -178,6 +178,24 @@ func (r *JitRequestReconciler) handleRejected(
 	return ctrl.Result{}, nil
 }
 
+// Validate namespace(s) have namespaceLabels
+func (r *JitRequestReconciler) validateNamespaceLabels(ctx context.Context, jitRequest *justintimev1.JitRequest) (string, error) {
+	for _, namespace := range jitRequest.Spec.Namespaces {
+		ns := &corev1.Namespace{}
+		err := r.Get(ctx, client.ObjectKey{Name: namespace}, ns)
+		if err != nil {
+			return namespace, fmt.Errorf("failed to get namespace %s: %v", namespace, err)
+		}
+
+		for key, value := range jitRequest.Spec.NamespaceLabels {
+			if ns.Labels[key] != value {
+				return namespace, fmt.Errorf("namespace %s does not have the label %s=%s", namespace, key, value)
+			}
+		}
+	}
+	return "", nil
+}
+
 // Create new Jira ticket for new JitRequests, validate config
 func (r *JitRequestReconciler) handleNewRequest(
 	ctx context.Context,
@@ -208,7 +226,29 @@ func (r *JitRequestReconciler) handleNewRequest(
 		return r.rejectInvalidRole(ctx, l, jitRequest, jiraIssueKey)
 	}
 
+	// check namespace labels match namespace(s)
+	ns, err := r.validateNamespaceLabels(ctx, jitRequest)
+	if err != nil {
+		return r.rejectInvalidNamespace(ctx, l, jitRequest, jiraIssueKey, ns)
+	}
+
 	return r.preApproveRequest(ctx, l, jitRequest, jiraIssueKey, additionalComments)
+}
+
+// Reject an invalid namespace
+func (r *JitRequestReconciler) rejectInvalidNamespace(
+	ctx context.Context,
+	l logr.Logger,
+	jitRequest *justintimev1.JitRequest,
+	jiraIssueKey, namespace string,
+) (ctrl.Result, error) {
+	errorMsg := fmt.Sprintf("Namespace '%s' is not validated", namespace)
+	r.raiseEvent(jitRequest, "Warning", "ValidationFailed", errorMsg)
+	if err := r.updateStatus(ctx, jitRequest, StatusRejected, errorMsg, jiraIssueKey, 3); err != nil {
+		l.Error(err, "failed to update status to Rejected")
+		return ctrl.Result{}, err
+	}
+	return ctrl.Result{}, nil
 }
 
 // Reject an invalid cluster role
