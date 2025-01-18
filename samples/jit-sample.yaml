@@ -9,10 +9,11 @@ spec:
     - "dev3@dev.com"
   namespaces: 
     - foo
+    - bar
   namespaceLabels:
     foo: bar
-  startTime: 2025-01-18T11:42:10Z
-  endTime: 2025-01-18T11:43:10Z
+  startTime: 2025-01-18T11:48:10Z
+  endTime: 2025-01-18T11:51:10Z
   clusterRole: edit
   jiraFields:
     Approver: admin
