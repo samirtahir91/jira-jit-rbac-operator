@@ -76,9 +76,16 @@ spec:
                   type: string
                 description: Custom Jira workflow fields
                 type: object
-              namespace:
+              namespaceLabels:
+                additionalProperties:
+                  type: string
+                description: Optional labels to filter namespace on
+                type: object
+              namespaces:
                 description: Namespace to bind role and user
-                type: string
+                items:
+                  type: string
+                type: array
               startTime:
                 description: |-
                   Start time for the JIT access, i.e. "2024-12-04T21:00:00Z"
@@ -92,7 +99,7 @@ spec:
             - clusterRole
             - endTime
             - jiraFields
-            - namespace
+            - namespaces
             - startTime
             - userEmail
             type: object
