@@ -121,6 +121,18 @@ func (in *JitRequestSpec) DeepCopyInto(out *JitRequestSpec) {
 		*out = make([]string, len(*in))
 		copy(*out, *in)
 	}
+	if in.Namespaces != nil {
+		in, out := &in.Namespaces, &out.Namespaces
+		*out = make([]string, len(*in))
+		copy(*out, *in)
+	}
+	if in.NamespaceLabels != nil {
+		in, out := &in.NamespaceLabels, &out.NamespaceLabels
+		*out = make(map[string]string, len(*in))
+		for key, val := range *in {
+			(*out)[key] = val
+		}
+	}
 	in.StartTime.DeepCopyInto(&out.StartTime)
 	in.EndTime.DeepCopyInto(&out.EndTime)
 	if in.JiraFields != nil {

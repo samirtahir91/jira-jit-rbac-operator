@@ -229,7 +229,7 @@ func (r *JitRequestReconciler) handleNewRequest(
 	// check namespace labels match namespace(s)
 	ns, err := r.validateNamespaceLabels(ctx, jitRequest)
 	if err != nil {
-		return r.rejectInvalidNamespace(ctx, l, jitRequest, jiraIssueKey, ns)
+		return r.rejectInvalidNamespace(ctx, l, jitRequest, jiraIssueKey, ns, err.Error())
 	}
 
 	return r.preApproveRequest(ctx, l, jitRequest, jiraIssueKey, additionalComments)
@@ -240,9 +240,9 @@ func (r *JitRequestReconciler) rejectInvalidNamespace(
 	ctx context.Context,
 	l logr.Logger,
 	jitRequest *justintimev1.JitRequest,
-	jiraIssueKey, namespace string,
+	jiraIssueKey, namespace, err string,
 ) (ctrl.Result, error) {
-	errorMsg := fmt.Sprintf("Namespace '%s' is not validated", namespace)
+	errorMsg := fmt.Sprintf("Namespace '%s' is not validated | Error: %s", namespace, err)
 	r.raiseEvent(jitRequest, "Warning", "ValidationFailed", errorMsg)
 	if err := r.updateStatus(ctx, jitRequest, StatusRejected, errorMsg, jiraIssueKey, 3); err != nil {
 		l.Error(err, "failed to update status to Rejected")
