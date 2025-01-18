@@ -95,7 +95,7 @@ func (r *JitRequestReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	targetEnvironment := operatorConfig.Environment
 	additionalComments := operatorConfig.AdditionalCommentText
 
-	l.Info("Got JitRequest", "Requestor", jitRequest.Spec.Reporter, "Role", jitRequest.Spec.ClusterRole, "Namespace", jitRequest.Spec.Namespace)
+	l.Info("Got JitRequest", "Requestor", jitRequest.Spec.Reporter, "Role", jitRequest.Spec.ClusterRole, "Namespace", strings.Join(jitRequest.Spec.Namespaces, ", "))
 
 	// Handle JitRequest based on its status
 	switch jitRequest.Status.State {
@@ -248,7 +248,8 @@ func (r *JitRequestReconciler) preApproveRequest(
 		// build comment
 		jiraMessage := fmt.Sprintf("{color:#00875a}*%s*{color}", jitRequestStatusMsg)
 		jiraTicket := jitRequest.Status.JiraTicket
-		comment := jiraMessage + "\n|*Namespace(s)*|" + jitRequest.Spec.Namespace + "|\n|*User*|" + jitRequest.Spec.Reporter + "|"
+		namespaces := strings.Join(jitRequest.Spec.Namespaces, "\n")
+		comment := jiraMessage + "\n|*Namespace(s)*|" + namespaces + "|\n|*User*|" + jitRequest.Spec.Reporter + "|"
 
 		// check if additionalUsers defined and add to comment
 		additionalUsers := jitRequest.Spec.AdditionUserEmails
@@ -644,20 +645,23 @@ func contains(slice []string, item string) bool {
 
 // Delete rolebinding in case of k8s GC failed to delete
 func (r *JitRequestReconciler) deleteOwnedObjects(ctx context.Context, jitRequest *justintimev1.JitRequest) error {
-	roleBindings := &rbacv1.RoleBindingList{}
-	err := r.List(ctx, roleBindings, client.InNamespace(jitRequest.Spec.Namespace))
-	if err != nil {
-		return err
-	}
+	for _, namespace := range jitRequest.Spec.Namespaces {
+		roleBindings := &rbacv1.RoleBindingList{}
 
-	for _, roleBinding := range roleBindings.Items {
-		for _, ownerRef := range roleBinding.OwnerReferences {
-			if ownerRef.Kind == "JitRequest" && ownerRef.Name == jitRequest.Name {
-				// Delete the RoleBinding if it is owned by the JitRequest
-				if err := r.Delete(ctx, &roleBinding); err != nil {
-					return err
+		err := r.List(ctx, roleBindings, client.InNamespace(namespace))
+		if err != nil {
+			return err
+		}
+
+		for _, roleBinding := range roleBindings.Items {
+			for _, ownerRef := range roleBinding.OwnerReferences {
+				if ownerRef.Kind == "JitRequest" && ownerRef.Name == jitRequest.Name {
+					// Delete the RoleBinding if it is owned by the JitRequest
+					if err := r.Delete(ctx, &roleBinding); err != nil {
+						return err
+					}
+					break
 				}
-				break
 			}
 		}
 	}
@@ -670,9 +674,8 @@ func isAlreadyExistsError(err error) bool {
 	return err != nil && apierrors.IsAlreadyExists(err)
 }
 
-// Create rolebinding for a JitRequest
+// Create rolebinding(s) for a JitRequest's namespaces
 func (r *JitRequestReconciler) createRoleBinding(ctx context.Context, jitRequest *justintimev1.JitRequest) error {
-
 	// Add reporter to subject
 	subjects := []rbacv1.Subject{
 		{
@@ -689,31 +692,34 @@ func (r *JitRequestReconciler) createRoleBinding(ctx context.Context, jitRequest
 		})
 	}
 
-	roleBinding := &rbacv1.RoleBinding{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      fmt.Sprintf("%s-jit", jitRequest.Name),
-			Namespace: jitRequest.Spec.Namespace,
-			Annotations: map[string]string{
-				"justintime.samir.io/expiry": jitRequest.Spec.EndTime.Time.Format(time.RFC3339),
+	// Loop through namespaces in JitRequest and create role binding
+	for _, namespace := range jitRequest.Spec.Namespaces {
+		roleBinding := &rbacv1.RoleBinding{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      fmt.Sprintf("%s-jit", jitRequest.Name),
+				Namespace: namespace,
+				Annotations: map[string]string{
+					"justintime.samir.io/expiry": jitRequest.Spec.EndTime.Time.Format(time.RFC3339),
+				},
 			},
-		},
-		Subjects: subjects,
-		RoleRef: rbacv1.RoleRef{
-			APIGroup: rbacv1.GroupName,
-			Kind:     "ClusterRole",
-			Name:     jitRequest.Spec.ClusterRole,
-		},
-	}
+			Subjects: subjects,
+			RoleRef: rbacv1.RoleRef{
+				APIGroup: rbacv1.GroupName,
+				Kind:     "ClusterRole",
+				Name:     jitRequest.Spec.ClusterRole,
+			},
+		}
 
-	// Set owner references
-	if err := controllerutil.SetControllerReference(jitRequest, roleBinding, r.Scheme); err != nil {
-		return fmt.Errorf("failed to set owner reference for RoleBinding: %v", err)
-	}
+		// Set owner references
+		if err := controllerutil.SetControllerReference(jitRequest, roleBinding, r.Scheme); err != nil {
+			return fmt.Errorf("failed to set owner reference for RoleBinding: %v", err)
+		}
 
-	// Create RoleBinding
-	if err := r.Client.Create(ctx, roleBinding); err != nil {
-		if !isAlreadyExistsError(err) {
-			return fmt.Errorf("failed to create RoleBinding: %w", err)
+		// Create RoleBinding
+		if err := r.Client.Create(ctx, roleBinding); err != nil {
+			if !isAlreadyExistsError(err) {
+				return fmt.Errorf("failed to create RoleBinding: %w", err)
+			}
 		}
 	}
 
