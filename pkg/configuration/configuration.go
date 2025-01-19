@@ -27,4 +27,7 @@ type Configuration interface {
 	ApprovedTransitionID() string
 	CustomFields() map[string]justintimev1.CustomFieldSettings
 	RequiredFields() *justintimev1.RequiredFieldsSpec
+	Labels() []string
+	AdditionalCommentText() string
+	Environment() *justintimev1.EnvironmentSpec
 }

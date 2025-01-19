@@ -29,7 +29,9 @@ type JitRequestSpec struct {
 	// Role to bind
 	ClusterRole string `json:"clusterRole"`
 	// Namespace to bind role and user
-	Namespace string `json:"namespace"`
+	Namespaces []string `json:"namespaces"`
+	// Optional labels to filter namespace on
+	NamespaceLabels map[string]string `json:"namespaceLabels,omitempty"`
 	// Start time for the JIT access, i.e. "2024-12-04T21:00:00Z"
 	// ISO 8601 format
 	StartTime metav1.Time `json:"startTime"`

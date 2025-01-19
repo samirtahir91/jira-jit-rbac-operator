@@ -91,15 +91,18 @@ func (r *JitRequestReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	approvedTransitionID := operatorConfig.ApprovedTransitionID
 	customFieldsConfig := operatorConfig.CustomFields
 	requiredFieldsConfig := operatorConfig.RequiredFields
+	ticketLabels := operatorConfig.Labels
+	targetEnvironment := operatorConfig.Environment
+	additionalComments := operatorConfig.AdditionalCommentText
 
-	l.Info("Got JitRequest", "Requestor", jitRequest.Spec.Reporter, "Role", jitRequest.Spec.ClusterRole, "Namespace", jitRequest.Spec.Namespace)
+	l.Info("Got JitRequest", "Requestor", jitRequest.Spec.Reporter, "Role", jitRequest.Spec.ClusterRole, "Namespace", strings.Join(jitRequest.Spec.Namespaces, ", "))
 
 	// Handle JitRequest based on its status
 	switch jitRequest.Status.State {
 	case StatusRejected:
 		return r.handleRejected(ctx, l, jitRequest, rejectedTransitionID)
 	case "":
-		return r.handleNewRequest(ctx, l, jitRequest, allowedClusterRoles, jiraProject, jiraIssueType, customFieldsConfig, requiredFieldsConfig)
+		return r.handleNewRequest(ctx, l, jitRequest, allowedClusterRoles, jiraProject, jiraIssueType, customFieldsConfig, requiredFieldsConfig, ticketLabels, targetEnvironment, additionalComments)
 	case StatusPreApproved:
 		return r.handlePreApproved(ctx, l, jitRequest, approvedTransitionID, jiraWorkflowApproveStatus)
 	case StatusSucceeded:
@@ -175,6 +178,24 @@ func (r *JitRequestReconciler) handleRejected(
 	return ctrl.Result{}, nil
 }
 
+// Validate namespace(s) have namespaceLabels
+func (r *JitRequestReconciler) validateNamespaceLabels(ctx context.Context, jitRequest *justintimev1.JitRequest) (string, error) {
+	for _, namespace := range jitRequest.Spec.Namespaces {
+		ns := &corev1.Namespace{}
+		err := r.Get(ctx, client.ObjectKey{Name: namespace}, ns)
+		if err != nil {
+			return namespace, fmt.Errorf("failed to get namespace %s: %v", namespace, err)
+		}
+
+		for key, value := range jitRequest.Spec.NamespaceLabels {
+			if ns.Labels[key] != value {
+				return namespace, fmt.Errorf("namespace %s does not have the label %s=%s", namespace, key, value)
+			}
+		}
+	}
+	return "", nil
+}
+
 // Create new Jira ticket for new JitRequests, validate config
 func (r *JitRequestReconciler) handleNewRequest(
 	ctx context.Context,
@@ -185,8 +206,11 @@ func (r *JitRequestReconciler) handleNewRequest(
 	jiraIssueType string,
 	customFieldsConfig map[string]v1.CustomFieldSettings,
 	requiredFieldsConfig *v1.RequiredFieldsSpec,
+	ticketLabels []string,
+	targetEnvironment *v1.EnvironmentSpec,
+	additionalComments string,
 ) (ctrl.Result, error) {
-	jiraIssueKey, err := r.createJiraTicket(ctx, jitRequest, jiraProject, jiraIssueType, customFieldsConfig, requiredFieldsConfig)
+	jiraIssueKey, err := r.createJiraTicket(ctx, jitRequest, jiraProject, jiraIssueType, customFieldsConfig, requiredFieldsConfig, ticketLabels, targetEnvironment)
 	if err != nil {
 		l.Error(err, "failed to createJiraTicket")
 		return ctrl.Result{}, err
@@ -202,7 +226,29 @@ func (r *JitRequestReconciler) handleNewRequest(
 		return r.rejectInvalidRole(ctx, l, jitRequest, jiraIssueKey)
 	}
 
-	return r.preApproveRequest(ctx, l, jitRequest, jiraIssueKey)
+	// check namespace labels match namespace(s)
+	ns, err := r.validateNamespaceLabels(ctx, jitRequest)
+	if err != nil {
+		return r.rejectInvalidNamespace(ctx, l, jitRequest, jiraIssueKey, ns, err.Error())
+	}
+
+	return r.preApproveRequest(ctx, l, jitRequest, jiraIssueKey, additionalComments)
+}
+
+// Reject an invalid namespace
+func (r *JitRequestReconciler) rejectInvalidNamespace(
+	ctx context.Context,
+	l logr.Logger,
+	jitRequest *justintimev1.JitRequest,
+	jiraIssueKey, namespace, err string,
+) (ctrl.Result, error) {
+	errorMsg := fmt.Sprintf("Namespace '%s' is not validated | Error: %s", namespace, err)
+	r.raiseEvent(jitRequest, "Warning", "ValidationFailed", errorMsg)
+	if err := r.updateStatus(ctx, jitRequest, StatusRejected, errorMsg, jiraIssueKey, 3); err != nil {
+		l.Error(err, "failed to update status to Rejected")
+		return ctrl.Result{}, err
+	}
+	return ctrl.Result{}, nil
 }
 
 // Reject an invalid cluster role
@@ -226,27 +272,37 @@ func (r *JitRequestReconciler) preApproveRequest(
 	ctx context.Context,
 	l logr.Logger,
 	jitRequest *justintimev1.JitRequest,
-	jiraIssueKey string,
+	jiraIssueKey, additionalComments string,
 ) (ctrl.Result, error) {
 	startTime := jitRequest.Spec.StartTime.Time
 	if startTime.After(time.Now()) {
 		// update status and event
 		r.raiseEvent(jitRequest, "Normal", StatusPreApproved, fmt.Sprintf("ClusterRole '%s' is allowed", jitRequest.Spec.ClusterRole))
-		if err := r.updateStatus(ctx, jitRequest, StatusPreApproved, "*Pre-approval* - Access will be granted at start time pending human approval(s)", jiraIssueKey, 3); err != nil {
+		// status
+		jitRequestStatusMsg := "Pre-approval - Access will be granted at start time pending human approval(s)"
+		if err := r.updateStatus(ctx, jitRequest, StatusPreApproved, jitRequestStatusMsg, jiraIssueKey, 3); err != nil {
 			l.Error(err, "failed to update status to Pre-Approved")
 			return ctrl.Result{}, err
 		}
 
 		// build comment
+		jiraMessage := fmt.Sprintf("{color:#00875a}*%s*{color}", jitRequestStatusMsg)
 		jiraTicket := jitRequest.Status.JiraTicket
-		comment := jitRequest.Status.Message + "\n*Namespace*: " + jitRequest.Spec.Namespace + "\n*User:* " + jitRequest.Spec.Reporter
+		namespaces := strings.Join(jitRequest.Spec.Namespaces, "\n")
+		comment := jiraMessage + "\n|*Namespace(s)*|" + namespaces + "|\n|*User*|" + jitRequest.Spec.Reporter + "|"
 
 		// check if additionalUsers defined and add to comment
 		additionalUsers := jitRequest.Spec.AdditionUserEmails
 		if len(additionalUsers) > 0 {
-			additionalUsersStr := "- " + strings.Join(additionalUsers, "\n- ")
-			comment += "\n*Additional Users:*\n" + additionalUsersStr
+			additionalUsersStr := strings.Join(additionalUsers, "\n")
+			comment += "\n|*Additional Users*|" + additionalUsersStr + "|"
 		}
+
+		// add additional comments if exists
+		if additionalComments != "" {
+			comment += "\n\n*Additional Info:*\n" + additionalComments
+		}
+
 		// add comment
 		if err := r.updateJiraTicket(ctx, jiraTicket, comment); err != nil {
 			return ctrl.Result{}, err
@@ -355,7 +411,7 @@ func (r *JitRequestReconciler) completeJiraTicket(ctx context.Context, jitReques
 
 	// Add a comment to the Jira issue
 	jiraTicket := jitRequest.Status.JiraTicket
-	comment := fmt.Sprintf("Completed - %s", jitRequest.Status.Message)
+	comment := fmt.Sprintf("{color:#00875a}*Completed - %s*{color}", jitRequest.Status.Message)
 	l.Info("Compelting Jira ticket", "jiraTicket", jiraTicket)
 	if err := r.updateJiraTicket(ctx, jiraTicket, comment); err != nil {
 		return err
@@ -467,6 +523,8 @@ func (r *JitRequestReconciler) createJiraTicket(
 	jiraIssueType string,
 	customFieldsConfig map[string]v1.CustomFieldSettings,
 	requiredFieldsConfig *v1.RequiredFieldsSpec,
+	ticketLabels []string,
+	targetEnvironment *v1.EnvironmentSpec,
 ) (string, error) {
 	l := log.FromContext(ctx)
 
@@ -518,6 +576,16 @@ func (r *JitRequestReconciler) createJiraTicket(
 		return "", err
 	}
 
+	targetCluster := targetEnvironment.Cluster
+	targetEnv := targetEnvironment.Environment
+	combinedLabels := append(
+		ticketLabels,
+		"jira-jit-rbac-operator",
+		"automated_jit_request",
+		targetCluster,
+		targetEnv,
+	)
+
 	// payload for new jira ticket
 	payload := models.IssueSchemeV2{
 		Fields: &models.IssueFieldsSchemeV2{
@@ -532,7 +600,7 @@ func (r *JitRequestReconciler) createJiraTicket(
 			Reporter: &models.UserScheme{
 				Name: reporterAccountName,
 			},
-			Labels: []string{"jira-jit-rbac-operator", "automated_jit_request"},
+			Labels: combinedLabels,
 		},
 	}
 
@@ -557,7 +625,7 @@ func (r *JitRequestReconciler) rejectJiraTicket(ctx context.Context, jitRequest 
 
 	// Add a comment to the Jira issue
 	jiraTicket := jitRequest.Status.JiraTicket
-	comment := fmt.Sprintf("Rejected - %s", jitRequest.Status.Message)
+	comment := fmt.Sprintf("{color:#de350b}*Rejected - %s*{color}", jitRequest.Status.Message)
 	l.Info("Rejecting Jira ticket", "jiraTicket", jiraTicket)
 	if err := r.updateJiraTicket(ctx, jiraTicket, comment); err != nil {
 		return err
@@ -617,20 +685,23 @@ func contains(slice []string, item string) bool {
 
 // Delete rolebinding in case of k8s GC failed to delete
 func (r *JitRequestReconciler) deleteOwnedObjects(ctx context.Context, jitRequest *justintimev1.JitRequest) error {
-	roleBindings := &rbacv1.RoleBindingList{}
-	err := r.List(ctx, roleBindings, client.InNamespace(jitRequest.Spec.Namespace))
-	if err != nil {
-		return err
-	}
+	for _, namespace := range jitRequest.Spec.Namespaces {
+		roleBindings := &rbacv1.RoleBindingList{}
 
-	for _, roleBinding := range roleBindings.Items {
-		for _, ownerRef := range roleBinding.OwnerReferences {
-			if ownerRef.Kind == "JitRequest" && ownerRef.Name == jitRequest.Name {
-				// Delete the RoleBinding if it is owned by the JitRequest
-				if err := r.Delete(ctx, &roleBinding); err != nil {
-					return err
+		err := r.List(ctx, roleBindings, client.InNamespace(namespace))
+		if err != nil {
+			return err
+		}
+
+		for _, roleBinding := range roleBindings.Items {
+			for _, ownerRef := range roleBinding.OwnerReferences {
+				if ownerRef.Kind == "JitRequest" && ownerRef.Name == jitRequest.Name {
+					// Delete the RoleBinding if it is owned by the JitRequest
+					if err := r.Delete(ctx, &roleBinding); err != nil {
+						return err
+					}
+					break
 				}
-				break
 			}
 		}
 	}
@@ -643,9 +714,8 @@ func isAlreadyExistsError(err error) bool {
 	return err != nil && apierrors.IsAlreadyExists(err)
 }
 
-// Create rolebinding for a JitRequest
+// Create rolebinding(s) for a JitRequest's namespaces
 func (r *JitRequestReconciler) createRoleBinding(ctx context.Context, jitRequest *justintimev1.JitRequest) error {
-
 	// Add reporter to subject
 	subjects := []rbacv1.Subject{
 		{
@@ -662,31 +732,34 @@ func (r *JitRequestReconciler) createRoleBinding(ctx context.Context, jitRequest
 		})
 	}
 
-	roleBinding := &rbacv1.RoleBinding{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      fmt.Sprintf("%s-jit", jitRequest.Name),
-			Namespace: jitRequest.Spec.Namespace,
-			Annotations: map[string]string{
-				"justintime.samir.io/expiry": jitRequest.Spec.EndTime.Time.Format(time.RFC3339),
+	// Loop through namespaces in JitRequest and create role binding
+	for _, namespace := range jitRequest.Spec.Namespaces {
+		roleBinding := &rbacv1.RoleBinding{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      fmt.Sprintf("%s-jit", jitRequest.Name),
+				Namespace: namespace,
+				Annotations: map[string]string{
+					"justintime.samir.io/expiry": jitRequest.Spec.EndTime.Time.Format(time.RFC3339),
+				},
 			},
-		},
-		Subjects: subjects,
-		RoleRef: rbacv1.RoleRef{
-			APIGroup: rbacv1.GroupName,
-			Kind:     "ClusterRole",
-			Name:     jitRequest.Spec.ClusterRole,
-		},
-	}
+			Subjects: subjects,
+			RoleRef: rbacv1.RoleRef{
+				APIGroup: rbacv1.GroupName,
+				Kind:     "ClusterRole",
+				Name:     jitRequest.Spec.ClusterRole,
+			},
+		}
 
-	// Set owner references
-	if err := controllerutil.SetControllerReference(jitRequest, roleBinding, r.Scheme); err != nil {
-		return fmt.Errorf("failed to set owner reference for RoleBinding: %v", err)
-	}
+		// Set owner references
+		if err := controllerutil.SetControllerReference(jitRequest, roleBinding, r.Scheme); err != nil {
+			return fmt.Errorf("failed to set owner reference for RoleBinding: %v", err)
+		}
 
-	// Create RoleBinding
-	if err := r.Client.Create(ctx, roleBinding); err != nil {
-		if !isAlreadyExistsError(err) {
-			return fmt.Errorf("failed to create RoleBinding: %w", err)
+		// Create RoleBinding
+		if err := r.Client.Create(ctx, roleBinding); err != nil {
+			if !isAlreadyExistsError(err) {
+				return fmt.Errorf("failed to create RoleBinding: %w", err)
+			}
 		}
 	}
 
