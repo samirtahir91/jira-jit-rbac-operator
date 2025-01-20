@@ -45,7 +45,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	justintimev1 "jira-jit-rbac-operator/api/v1"
-	v1 "jira-jit-rbac-operator/api/v1"
 	"jira-jit-rbac-operator/internal/config"
 )
 
@@ -54,18 +53,19 @@ var (
 )
 
 const (
-	StatusRejected    = "Rejected"
-	StatusPreApproved = "Pre-Approved"
-	StatusSucceeded   = "Succeeded"
+	StatusRejected        = "Rejected"
+	StatusPreApproved     = "Pre-Approved"
+	StatusSucceeded       = "Succeeded"
+	EventValidationFailed = "ValidationFailed"
+	Skipped               = "Skipped"
 )
 
 // JitRequestReconciler reconciles a JitRequest object
 type JitRequestReconciler struct {
 	JiraClient *jira.Client
 	client.Client
-	Scheme            *runtime.Scheme
-	Recorder          record.EventRecorder
-	ConfigurationName string
+	Scheme   *runtime.Scheme
+	Recorder record.EventRecorder
 }
 
 // Reconcile loop
@@ -138,7 +138,7 @@ func (r *JitRequestReconciler) handleFetchError(
 }
 
 // Read operator configuration from config file
-func (r *JitRequestReconciler) readConfigFromFile(filePath string, fileName string) (*v1.JustInTimeConfigSpec, error) {
+func (r *JitRequestReconciler) readConfigFromFile(filePath string, fileName string) (*justintimev1.JustInTimeConfigSpec, error) {
 	// common lock for concurrent reads
 	config.ConfigLock.RLock()
 	defer config.ConfigLock.RUnlock()
@@ -148,7 +148,7 @@ func (r *JitRequestReconciler) readConfigFromFile(filePath string, fileName stri
 		return nil, fmt.Errorf("failed to read configuration file: %w", err)
 	}
 
-	var config v1.JustInTimeConfigSpec
+	var config justintimev1.JustInTimeConfigSpec
 	if err := json.Unmarshal(data, &config); err != nil {
 		return nil, fmt.Errorf("failed to parse configuration file: %w", err)
 	}
@@ -164,7 +164,7 @@ func (r *JitRequestReconciler) handleRejected(
 	rejectedTransitionID string,
 ) (ctrl.Result, error) {
 	// Reject jira ticket
-	if jitRequest.Status.JiraTicket != "Skipped" {
+	if jitRequest.Status.JiraTicket != Skipped {
 		if err := r.rejectJiraTicket(ctx, jitRequest, rejectedTransitionID); err != nil {
 			l.Error(err, "failed to reject jira ticket")
 			return ctrl.Result{}, err
@@ -204,10 +204,10 @@ func (r *JitRequestReconciler) handleNewRequest(
 	allowedClusterRoles []string,
 	jiraProject,
 	jiraIssueType string,
-	customFieldsConfig map[string]v1.CustomFieldSettings,
-	requiredFieldsConfig *v1.RequiredFieldsSpec,
+	customFieldsConfig map[string]justintimev1.CustomFieldSettings,
+	requiredFieldsConfig *justintimev1.RequiredFieldsSpec,
 	ticketLabels []string,
-	targetEnvironment *v1.EnvironmentSpec,
+	targetEnvironment *justintimev1.EnvironmentSpec,
 	additionalComments string,
 ) (ctrl.Result, error) {
 	jiraIssueKey, err := r.createJiraTicket(ctx, jitRequest, jiraProject, jiraIssueType, customFieldsConfig, requiredFieldsConfig, ticketLabels, targetEnvironment)
@@ -217,7 +217,7 @@ func (r *JitRequestReconciler) handleNewRequest(
 	}
 
 	// Return if missing jira field
-	if jiraIssueKey == "Skipped" {
+	if jiraIssueKey == Skipped {
 		return ctrl.Result{}, nil
 	}
 
@@ -242,8 +242,8 @@ func (r *JitRequestReconciler) rejectInvalidNamespace(
 	jitRequest *justintimev1.JitRequest,
 	jiraIssueKey, namespace, err string,
 ) (ctrl.Result, error) {
-	errorMsg := fmt.Sprintf("Namespace '%s' is not validated | Error: %s", namespace, err)
-	r.raiseEvent(jitRequest, "Warning", "ValidationFailed", errorMsg)
+	errorMsg := fmt.Sprintf("Namespace %s is not validated | Error: %s", namespace, err)
+	r.raiseEvent(jitRequest, "Warning", EventValidationFailed, errorMsg)
 	if err := r.updateStatus(ctx, jitRequest, StatusRejected, errorMsg, jiraIssueKey, 3); err != nil {
 		l.Error(err, "failed to update status to Rejected")
 		return ctrl.Result{}, err
@@ -259,7 +259,7 @@ func (r *JitRequestReconciler) rejectInvalidRole(
 	jiraIssueKey string,
 ) (ctrl.Result, error) {
 	errorMsg := fmt.Sprintf("ClusterRole '%s' is not allowed", jitRequest.Spec.ClusterRole)
-	r.raiseEvent(jitRequest, "Warning", "ValidationFailed", errorMsg)
+	r.raiseEvent(jitRequest, "Warning", EventValidationFailed, errorMsg)
 	if err := r.updateStatus(ctx, jitRequest, StatusRejected, errorMsg, jiraIssueKey, 3); err != nil {
 		l.Error(err, "failed to update status to Rejected")
 		return ctrl.Result{}, err
@@ -275,19 +275,20 @@ func (r *JitRequestReconciler) preApproveRequest(
 	jiraIssueKey, additionalComments string,
 ) (ctrl.Result, error) {
 	startTime := jitRequest.Spec.StartTime.Time
+
 	if startTime.After(time.Now()) {
+
 		// update status and event
-		r.raiseEvent(jitRequest, "Normal", StatusPreApproved, fmt.Sprintf("ClusterRole '%s' is allowed", jitRequest.Spec.ClusterRole))
+		r.raiseEvent(jitRequest, "Normal", StatusPreApproved, fmt.Sprintf("ClusterRole '%s' is allowed\nJira: %s", jitRequest.Spec.ClusterRole, jiraIssueKey))
 		// status
 		jitRequestStatusMsg := "Pre-approval - Access will be granted at start time pending human approval(s)"
-		if err := r.updateStatus(ctx, jitRequest, StatusPreApproved, jitRequestStatusMsg, jiraIssueKey, 3); err != nil {
+		if err := r.updateStatus(ctx, jitRequest, StatusPreApproved, jitRequestStatusMsg, jiraIssueKey, 5); err != nil {
 			l.Error(err, "failed to update status to Pre-Approved")
 			return ctrl.Result{}, err
 		}
 
 		// build comment
 		jiraMessage := fmt.Sprintf("{color:#00875a}*%s*{color}", jitRequestStatusMsg)
-		jiraTicket := jitRequest.Status.JiraTicket
 		namespaces := strings.Join(jitRequest.Spec.Namespaces, "\n")
 		comment := jiraMessage + "\n|*Namespace(s)*|" + namespaces + "|\n|*User*|" + jitRequest.Spec.Reporter + "|"
 
@@ -304,7 +305,7 @@ func (r *JitRequestReconciler) preApproveRequest(
 		}
 
 		// add comment
-		if err := r.updateJiraTicket(ctx, jiraTicket, comment); err != nil {
+		if err := r.updateJiraTicket(ctx, jiraIssueKey, comment); err != nil {
 			return ctrl.Result{}, err
 		}
 
@@ -316,6 +317,7 @@ func (r *JitRequestReconciler) preApproveRequest(
 
 	// invalid start time, reject
 	errMsg := fmt.Errorf("start time %s must be after current time", jitRequest.Spec.StartTime.Time)
+	r.raiseEvent(jitRequest, "Warning", EventValidationFailed, errMsg.Error())
 	if err := r.updateStatus(ctx, jitRequest, StatusRejected, errMsg.Error(), jiraIssueKey, 3); err != nil {
 		l.Error(err, "failed to update status to Rejected")
 		return ctrl.Result{}, err
@@ -344,6 +346,7 @@ func (r *JitRequestReconciler) handlePreApproved(
 	jiraTicket := jitRequest.Status.JiraTicket
 	if err := r.getJiraApproval(ctx, jitRequest, jiraWorkflowApproveStatus); err != nil {
 		l.Error(err, StatusRejected, "jira ticket", jiraTicket)
+		r.raiseEvent(jitRequest, "Warning", "JiraNotApproved", fmt.Sprintf("Error: %s", err))
 		if err := r.updateStatus(ctx, jitRequest, StatusRejected, "Jira ticket has not been approved", jiraTicket, 3); err != nil {
 			return ctrl.Result{}, err
 		}
@@ -397,8 +400,12 @@ func (r *JitRequestReconciler) updateJiraTicket(ctx context.Context, jiraTicket,
 	}
 	_, response, err := r.JiraClient.Issue.Comment.Add(context.Background(), jiraTicket, payload, nil)
 	if err != nil {
-		body := response.Bytes.String()
-		l.Error(err, "failed to add comment to jira ticket", "jiraTicket", jiraTicket, "response", body)
+		if response != nil {
+			body := response.Bytes.String()
+			l.Error(err, "failed to add comment to jira ticket", "jiraTicket", jiraTicket, "response", body)
+		} else {
+			l.Error(err, "failed to add comment to jira ticket", "jiraTicket", jiraTicket, "response", "nil response")
+		}
 		return err
 	}
 
@@ -412,7 +419,7 @@ func (r *JitRequestReconciler) completeJiraTicket(ctx context.Context, jitReques
 	// Add a comment to the Jira issue
 	jiraTicket := jitRequest.Status.JiraTicket
 	comment := fmt.Sprintf("{color:#00875a}*Completed - %s*{color}", jitRequest.Status.Message)
-	l.Info("Compelting Jira ticket", "jiraTicket", jiraTicket)
+	l.Info("Completing Jira ticket", "jiraTicket", jiraTicket)
 	if err := r.updateJiraTicket(ctx, jiraTicket, comment); err != nil {
 		return err
 	}
@@ -521,10 +528,10 @@ func (r *JitRequestReconciler) createJiraTicket(
 	jitRequest *justintimev1.JitRequest,
 	jiraProject,
 	jiraIssueType string,
-	customFieldsConfig map[string]v1.CustomFieldSettings,
-	requiredFieldsConfig *v1.RequiredFieldsSpec,
+	customFieldsConfig map[string]justintimev1.CustomFieldSettings,
+	requiredFieldsConfig *justintimev1.RequiredFieldsSpec,
 	ticketLabels []string,
-	targetEnvironment *v1.EnvironmentSpec,
+	targetEnvironment *justintimev1.EnvironmentSpec,
 ) (string, error) {
 	l := log.FromContext(ctx)
 
@@ -538,9 +545,9 @@ func (r *JitRequestReconciler) createJiraTicket(
 		if !exists {
 			// missing field, reject
 			errMsg := fmt.Errorf("missing custom field: %s", fieldName)
-			if err := r.updateStatus(ctx, jitRequest, StatusRejected, errMsg.Error(), "Skipped", 3); err != nil {
+			if err := r.updateStatus(ctx, jitRequest, StatusRejected, errMsg.Error(), Skipped, 3); err != nil {
 				l.Error(err, "failed to update status to Rejected")
-				return "Skipped", nil
+				return Skipped, nil
 			}
 		}
 		addCustomField(ctx, &customFields, settings.Type, settings.JiraCustomField, value)

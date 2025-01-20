@@ -3,10 +3,7 @@
 The `jira-jit-rbac-operator` is a Kubernetes operator that creates short-lived rolebindings for users based on a JitRequest custom resource. It integrates with a configurable Jira Workflow, the operator submitts a Jira ticket in a Jira Project for approval by a Human before granting the role-binding for the requested time period. It empowers self-service of Just-In-Time privileged access using Kubernetes RBAC.
 
 ## ToDo
-- Add labels optional cfg
-- add cluster and env details to comments
-  - labels
-- add optional Meta data cfg comment
+- error handle on jira api for client if no response
 - Update readme on latest spec
 - Optional OPA policy or Validating Webhook that compares with JustInTimeConfig customFields.
 
@@ -150,30 +147,21 @@ You can apply the samples (examples) from the config/sample:
 kubectl apply -k config/samples/
 ```
 
-### Testing - TODO
-
-Current integration tests cover the scenarios:
-- TODO
+### Integration Testing
+- Tests should be run against a real cluster, i.e. Kind or Minikube
+```sh
+export OPERATOR_NAMESPACE=jira-jit-int-test
+USE_EXISTING_CLUSTER=true make test
+```
 
 **Run the controller in the foreground for testing:**
 ```sh
 export JIT_RBAC_OPERATOR_CONFIG_PATH=/tmp/jit-test/
 export OPERATOR_NAMESPACE=default
-export JIRA_BASE_URL=http://127.0.0.1
+export JIRA_BASE_URL=http://127.0.0.1 # your jira url
 export JIRA_API_TOKEN=<PERSONAL ACESS TOKEN>
 # run
 make run
-```
-
-**Run integration tests against a real cluster, i.e. Minikube:**
-```sh
-cd ..
-USE_EXISTING_CLUSTER=true make test
-```
-
-**Run integration tests using env test (without a real cluster):**
-```sh
-USE_EXISTING_CLUSTER=false make test
 ```
 
 **Generate coverage html report:**
