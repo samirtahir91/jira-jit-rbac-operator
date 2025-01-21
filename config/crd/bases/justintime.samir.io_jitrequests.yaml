@@ -106,16 +106,31 @@ spec:
           status:
             description: JitRequestStatus defines the observed state of JitRequest.
             properties:
+              endTime:
+                description: |-
+                  End time for the JIT access, i.e. "2024-12-04T22:00:00Z"
+                  ISO 8601 format
+                format: date-time
+                type: string
               jiraTicket:
                 description: Jira ticket for jit request
                 type: string
               message:
                 description: Detailed message of jit request
                 type: string
+              startTime:
+                description: |-
+                  Start time for the JIT access, i.e. "2024-12-04T21:00:00Z"
+                  ISO 8601 format
+                format: date-time
+                type: string
               state:
                 default: Pending
                 description: Status of jit request
                 type: string
+            required:
+            - endTime
+            - startTime
             type: object
         type: object
     served: true

@@ -278,14 +278,11 @@ func (r *JitRequestReconciler) preApproveRequest(
 
 	if startTime.After(time.Now()) {
 
-		// update status and event
+		// record event
 		r.raiseEvent(jitRequest, "Normal", StatusPreApproved, fmt.Sprintf("ClusterRole '%s' is allowed\nJira: %s", jitRequest.Spec.ClusterRole, jiraIssueKey))
-		// status
+
+		// msg for status and comment
 		jitRequestStatusMsg := "Pre-approval - Access will be granted at start time pending human approval(s)"
-		if err := r.updateStatus(ctx, jitRequest, StatusPreApproved, jitRequestStatusMsg, jiraIssueKey, 5); err != nil {
-			l.Error(err, "failed to update status to Pre-Approved")
-			return ctrl.Result{}, err
-		}
 
 		// build comment
 		jiraMessage := fmt.Sprintf("{color:#00875a}*%s*{color}", jitRequestStatusMsg)
@@ -309,6 +306,12 @@ func (r *JitRequestReconciler) preApproveRequest(
 			return ctrl.Result{}, err
 		}
 
+		// update jitRequest status
+		if err := r.updateStatus(ctx, jitRequest, StatusPreApproved, jitRequestStatusMsg, jiraIssueKey, 5); err != nil {
+			l.Error(err, "failed to update status to Pre-Approved")
+			return ctrl.Result{}, err
+		}
+
 		// requeue for start time
 		delay := time.Until(startTime)
 		l.Info("Start time not reached, requeuing", "requeueAfter", delay)
@@ -317,13 +320,17 @@ func (r *JitRequestReconciler) preApproveRequest(
 
 	// invalid start time, reject
 	errMsg := fmt.Errorf("start time %s must be after current time", jitRequest.Spec.StartTime.Time)
+	l.Error(errMsg, "start time validation failed")
+
+	// record event
 	r.raiseEvent(jitRequest, "Warning", EventValidationFailed, errMsg.Error())
+
+	// update jitRequest status
 	if err := r.updateStatus(ctx, jitRequest, StatusRejected, errMsg.Error(), jiraIssueKey, 3); err != nil {
 		l.Error(err, "failed to update status to Rejected")
 		return ctrl.Result{}, err
 	}
 
-	l.Error(errMsg, "start time validation failed")
 	return ctrl.Result{}, nil
 }
 
@@ -335,7 +342,7 @@ func (r *JitRequestReconciler) handlePreApproved(
 	approvedTransitionID, jiraWorkflowApproveStatus string,
 ) (ctrl.Result, error) {
 	// check if needs to be re-queued
-	startTime := jitRequest.Spec.StartTime.Time
+	startTime := jitRequest.Status.StartTime.Time
 	if startTime.After(time.Now()) {
 		// requeue for start time
 		delay := time.Until(startTime)
@@ -360,11 +367,11 @@ func (r *JitRequestReconciler) handlePreApproved(
 		return ctrl.Result{}, err
 	}
 
-	if err := r.updateStatus(ctx, jitRequest, StatusSucceeded, "Access granted until end time", jiraTicket, 3); err != nil {
+	if err := r.completeJiraTicket(ctx, jitRequest, approvedTransitionID); err != nil {
 		return ctrl.Result{}, err
 	}
 
-	if err := r.completeJiraTicket(ctx, jitRequest, approvedTransitionID); err != nil {
+	if err := r.updateStatus(ctx, jitRequest, StatusSucceeded, "Access granted until end time", jiraTicket, 3); err != nil {
 		return ctrl.Result{}, err
 	}
 
@@ -374,7 +381,7 @@ func (r *JitRequestReconciler) handlePreApproved(
 
 // Handle and queue succeeded and unknown JitRequests for deletion
 func (r *JitRequestReconciler) handleCleaup(ctx context.Context, l logr.Logger, jitRequest *justintimev1.JitRequest) (ctrl.Result, error) {
-	endTime := jitRequest.Spec.EndTime.Time
+	endTime := jitRequest.Status.EndTime.Time
 	if endTime.After(time.Now()) {
 		delay := time.Until(endTime)
 		l.Info("End time not reached, requeuing", "requeueAfter", delay)
@@ -434,8 +441,12 @@ func (r *JitRequestReconciler) completeJiraTicket(ctx context.Context, jitReques
 	}
 	response, err := r.JiraClient.Issue.Move(context.Background(), jiraTicket, approvedTransitionID, options)
 	if err != nil {
-		body := response.Bytes.String()
-		l.Error(err, "failed to transition jira ticket to completed", "response", body)
+		if response != nil {
+			body := response.Bytes.String()
+			l.Error(err, "failed to transition jira ticket to completed", "response", body)
+		} else {
+			l.Error(err, "failed to transition jira ticket to completed", "jiraTicket", jiraTicket, "response", "nil response")
+		}
 		return err
 	}
 
@@ -452,8 +463,12 @@ func (r *JitRequestReconciler) getJiraApproval(ctx context.Context, jitRequest *
 	// Fetch the Jira issue details
 	issue, response, err := r.JiraClient.Issue.Get(ctx, jiraIssueKey, nil, nil)
 	if err != nil {
-		body := response.Bytes.String()
-		l.Error(err, "failed to fetch Jira ticket details", "jiraTicket", jiraIssueKey, "response", body)
+		if response != nil {
+			body := response.Bytes.String()
+			l.Error(err, "failed to fetch Jira ticket details", "jiraTicket", jiraIssueKey, "response", body)
+		} else {
+			l.Error(err, "failed to fetch Jira ticket details", "jiraTicket", jiraIssueKey, "response", "nil response")
+		}
 		return err
 	}
 
@@ -483,8 +498,12 @@ func (r *JitRequestReconciler) getNameByEmail(email string) (string, error) {
 	var users []User
 	response, err := r.JiraClient.Call(request, &users)
 	if err != nil {
-		body := response.Bytes.String()
-		return "", fmt.Errorf("failed to find account name for reporter email: %w, response: %s", err, body)
+		if response != nil {
+			body := response.Bytes.String()
+			return "", fmt.Errorf("failed to find account name for reporter email: %w, response: %s", err, body)
+		} else {
+			return "", fmt.Errorf("failed to find account name for reporter email: %w, response: nil response", err)
+		}
 	}
 
 	// check if any users were found
@@ -617,8 +636,12 @@ func (r *JitRequestReconciler) createJiraTicket(
 
 	createdIssue, response, err := r.JiraClient.Issue.Create(context.Background(), &payload, &customFields)
 	if err != nil {
-		body := response.Bytes.String()
-		l.Error(err, "failed to create Jira ticket", "response", body, "payload", payload, "customFields", customFields)
+		if response != nil {
+			body := response.Bytes.String()
+			l.Error(err, "failed to create Jira ticket", "response", body, "payload", payload, "customFields", customFields)
+		} else {
+			l.Error(err, "failed to create Jira ticket", "response", "nil response", "payload", payload, "customFields", customFields)
+		}
 		return "", err
 	}
 
@@ -648,8 +671,12 @@ func (r *JitRequestReconciler) rejectJiraTicket(ctx context.Context, jitRequest 
 	}
 	response, err := r.JiraClient.Issue.Move(context.Background(), jiraTicket, rejectedTransitionID, options)
 	if err != nil {
-		body := response.Bytes.String()
-		l.Error(err, "failed to transition jira ticket", "response", body)
+		if response != nil {
+			body := response.Bytes.String()
+			l.Error(err, "failed to transition jira ticket", "response", body)
+		} else {
+			l.Error(err, "failed to transition jira ticket", "response", "nil response")
+		}
 		return err
 	}
 
@@ -783,11 +810,13 @@ func (r *JitRequestReconciler) updateStatus(
 	maxAttempts int,
 ) error {
 	attempts := 0
+	jitRequest.Status.State = status
+	jitRequest.Status.Message = message
+	jitRequest.Status.JiraTicket = jiraTicket
+	jitRequest.Status.StartTime = jitRequest.Spec.StartTime
+	jitRequest.Status.EndTime = jitRequest.Spec.EndTime
 	for {
 		attempts++
-		jitRequest.Status.State = status
-		jitRequest.Status.Message = message
-		jitRequest.Status.JiraTicket = jiraTicket
 		err := r.Status().Update(ctx, jitRequest)
 		if err == nil {
 			return nil // Update successful

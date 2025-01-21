@@ -3,16 +3,22 @@
 The `jira-jit-rbac-operator` is a Kubernetes operator that creates short-lived rolebindings for users based on a JitRequest custom resource. It integrates with a configurable Jira Workflow, the operator submitts a Jira ticket in a Jira Project for approval by a Human before granting the role-binding for the requested time period. It empowers self-service of Just-In-Time privileged access using Kubernetes RBAC.
 
 ## ToDo
-- error handle on jira api for client if no response
-- Update readme on latest spec
 - Optional OPA policy or Validating Webhook that compares with JustInTimeConfig customFields.
 
 ## Description
 
 ### Key Features
-- Uses a custom cluster scoped resource `JitRequest`.
-- Reads `reporter`, `clusterRole`, `approver`, `productOwner`, `justification`, `namespace` `startTime` and `endTime` from a `JitRequest`.
-- Checks if the JitRequest's cluster role is allowed, from the `allowedClusterRoles` list defined in a `JustInTimeConfig` custom resource (set by admins/operators) and then pre-approves the request.
+- Uses a custom cluster scoped resource `JitRequest`, where a user creates a JitReuest with:
+  - reporter
+  - clusterRole
+  - additionalEmails (optional users to also add to role binding)
+  - namespaces
+  - namespaceLabels (optional)
+  - justification
+  - startTime
+  - endTime
+  - JiraFields (custom fields defined by JustInTimeConfig's `customFields`)
+- The operator checks if the JitRequest's cluster role is allowed, from the `allowedClusterRoles` list defined in a `JustInTimeConfig` custom resource (set by admins/operators) and then pre-approves the request.
 - Submits the request as a Jira Ticket to a configured Jira Project with the details as per the `JitRequest` spec.
 - Requeues the `JitRequest` object for the defined `startTime` and checks the Jira Ticket for approval status
 - Creates the RoleBinding as requested if Jira Ticket is approved, rejects and cleans-up `JitRequest` if the Jira Ticket is not approved.
@@ -37,34 +43,43 @@ kubectl -n jira-jit-rbac-operator-system create secret generic \
 
 The operator is configurable for a Jira project and Workflow using the `JustInTimeConfig` custom resource [sample](samples/jit-cfg.yaml)
 
-You will need to create the custom fields in Jira to be used by the workflow:
+You will need to create the required custom fields in Jira to be used by the workflow and map them to the `JustInTimeConfig`, i.e.:
 
 | Custom Field  | Type           |
 |---------------|----------------|
-| Reporter      | Text           |
-| Approver      | User Select    |
-| Product Owner | User Select    |
-| Justification | Text multiline |
 | Cluster Role  | Single select  |
 | Start Time    | Date and time  |
 | End Time      | Date and time  |
 
-The workflow used is [here](samples/workflow.xml), you need to [import](https://confluence.atlassian.com/display/ADMINJIRASERVER088/Using+XML+to+create+a+workflow)/create an identical Workflow in your Jira Project (the IDs of fields etc are configurable as below).
+The sample workflow used is [here](samples/workflow.xml), you need to [import](https://confluence.atlassian.com/display/ADMINJIRASERVER088/Using+XML+to+create+a+workflow)/create an identical Workflow in your Jira Project (the IDs of fields etc are configurable as below).
 
 You must define these with the values according to your Jira Project and Workflow (to map the fields from your workflow to the opertor's config):
-  - Allowed cluster roles
+  - allowedClusterRoles
+  - workflowApprovedStatus
   - rejectedTransitionID
   - jiraProject
   - jiraIssueType
   - approvedTransitionID
+  - requiredFields
+  - labels (optional)
+  - environment (optional)
+  - additionalCommentText (optional)
   - customFields
-      - Reporter
-      - Approver
-      - ProductOwner
-      - Justification
-      - ClusterRole
-      - StartTime
-      - EndTime
+
+The `customFields` is completely configurable to what fields you want a user to define a value for in a `JitRequest`\
+Each custom field is sent in the payload to Jira on creation of a new issue.\
+This allows you to use whatever fields as per your workflow.
+
+Detail:
+- Each customField requires a `type` and `jiraCustomField`
+- Each custom field is required in `JitRequest.Spec.JiraFields`
+- I.e. If I add `ProductOwner` as a custom field, then all users will need to define `JiraFields.ProductOwner` in my `JitRequest`
+- Example custom fields and data types:
+  | Custom Field  | Type           |
+  |---------------|----------------|
+  | Reporter      | Text           |
+  | ProductOwner  | User Select    |
+  | Justification | Text multiline |
 
 ### Logging and Debugging
 - By default, logs are JSON formatted, and log level is set to info and error.
@@ -92,14 +107,65 @@ kind: JitRequest
 metadata:
   name: jitrequest-sample
 spec:
-  reporter: test@foo.com
+  userEmail: dev@dev.com
+  additionalEmails:
+    - "dev2@dev.com"
+    - "dev3@dev.com"
+  namespaces: 
+    - foo
+    - bar
+  namespaceLabels:
+    foo: bar
+  startTime: 2025-01-18T11:48:10Z
+  endTime: 2025-01-18T11:51:10Z
   clusterRole: edit
-  approver: samirtahir91
-  productOwner: samirtahir91
-  justification: "need a jit now pls"
-  namespace: foo
-  startTime: 2024-12-09T14:31:00Z
-  endTime: 2024-12-09T14:31:10Z
+  jiraFields:
+    Approver: admin
+    ProductOwner: admin
+    Justification: "need a jit now pls"
+```
+
+Above the jiraFields are mapped to the customFields in the `JustInTimeConfig`:
+```yaml
+apiVersion: justintime.samir.io/v1
+kind: JustInTimeConfig
+metadata:
+  name: jira-jit-rbac-operator-default
+spec:
+  allowedClusterRoles:
+    - admin
+    - edit
+  labels:
+    - minikube-test
+  environment:
+    environment: local
+    cluster: minikube
+  additionalCommentText: "cluster: minikube"
+  workflowApprovedStatus: "Approved"
+  rejectedTransitionID: "21"
+  jiraProject: IAM
+  jiraIssueType: Access Request
+  approvedTransitionID: "41"
+  requiredFields:
+    ClusterRole:
+      type: "select"
+      jiraCustomField: "customfield_10115"
+    StartTime:
+      type: "date"
+      jiraCustomField: "customfield_10200"
+    EndTime:
+      type: "date"
+      jiraCustomField: "customfield_10201"
+  customFields:
+    Approver:
+      type: "user"
+      jiraCustomField: "customfield_10112"
+    ProductOwner:
+      type: "user"
+      jiraCustomField: "customfield_10113"
+    Justification:
+      type: "text"
+      jiraCustomField: "customfield_10114"
 ```
 
 ## Getting Started
