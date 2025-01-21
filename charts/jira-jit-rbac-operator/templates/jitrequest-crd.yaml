@@ -58,6 +58,11 @@ spec:
           spec:
             description: JitRequestSpec defines the desired state of JitRequest.
             properties:
+              additionalEmails:
+                description: Additional user emails to add to the Jira request
+                items:
+                  type: string
+                type: array
               clusterRole:
                 description: Role to bind
                 type: string
@@ -72,8 +77,47 @@ spec:
                   type: string
                 description: Custom Jira workflow fields
                 type: object
-              namespace:
+              namespaceLabels:
+                additionalProperties:
+                  type: string
+                description: Optional labels to filter namespace on
+                type: object
+              namespaces:
                 description: Namespace to bind role and user
+                items:
+                  type: string
+                type: array
+              startTime:
+                description: |-
+                  Start time for the JIT access, i.e. "2024-12-04T21:00:00Z"
+                  ISO 8601 format
+                format: date-time
+                type: string
+              userEmail:
+                description: The requestor's username/email to bind Role Binding to
+                type: string
+            required:
+            - clusterRole
+            - endTime
+            - jiraFields
+            - namespaces
+            - startTime
+            - userEmail
+            type: object
+          status:
+            description: JitRequestStatus defines the observed state of JitRequest.
+            properties:
+              endTime:
+                description: |-
+                  End time for the JIT access, i.e. "2024-12-04T22:00:00Z"
+                  ISO 8601 format
+                format: date-time
+                type: string
+              jiraTicket:
+                description: Jira ticket for jit request
+                type: string
+              message:
+                description: Detailed message of jit request
                 type: string
               startTime:
                 description: |-
@@ -81,30 +125,13 @@ spec:
                   ISO 8601 format
                 format: date-time
                 type: string
-              userID:
-                description: The requestor's username/email to bind Role Binding to
-                type: string
-            required:
-            - clusterRole
-            - endTime
-            - jiraFields
-            - namespace
-            - startTime
-            - userID
-            type: object
-          status:
-            description: JitRequestStatus defines the observed state of JitRequest.
-            properties:
-              jiraTicket:
-                description: Jira ticket for jit request
-                type: string
-              message:
-                description: Detailed message of jit request
-                type: string
               state:
                 default: Pending
                 description: Status of jit request
                 type: string
+            required:
+            - endTime
+            - startTime
             type: object
         type: object
     served: true

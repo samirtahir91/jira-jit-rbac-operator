@@ -16,7 +16,7 @@ controllerManager:
     image:
       repository: samirtahir91076/jira-jit-rbac-operator
       tag: latest
-    imagePullPolicy: Never
+    imagePullPolicy: Always
     resources:
       limits:
         cpu: 500m

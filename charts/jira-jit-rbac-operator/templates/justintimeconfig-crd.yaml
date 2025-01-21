@@ -42,6 +42,9 @@ spec:
           spec:
             description: JustInTimeConfigSpec defines the desired state of JustInTimeConfig.
             properties:
+              additionalCommentText:
+                description: Optional text to add to jira ticket comment
+                type: string
               allowedClusterRoles:
                 description: Configure allowed cluster roles to bind for a JitRequest
                 items:
@@ -66,12 +69,30 @@ spec:
                 description: Optional additional fields to map to the ticket and enforce
                   on a JitRequest's jiraFields
                 type: object
+              environment:
+                description: Environment and cluster name to add as label to jira tickets
+                properties:
+                  cluster:
+                    description: StartTime field in Jira
+                    type: string
+                  environment:
+                    description: Environmnt name
+                    type: string
+                required:
+                - cluster
+                - environment
+                type: object
               jiraIssueType:
                 description: The Jira issue type
                 type: string
               jiraProject:
                 description: The Jira project key
                 type: string
+              labels:
+                description: Optional labels to add to jira tickets
+                items:
+                  type: string
+                type: array
               rejectedTransitionID:
                 description: The workflow transition ID for rejecting a ticket
                 type: string
@@ -121,9 +142,11 @@ spec:
                   "Approved"
                 type: string
             required:
+            - additionalCommentText
             - allowedClusterRoles
             - approvedTransitionID
             - customFields
+            - environment
             - jiraIssueType
             - jiraProject
             - rejectedTransitionID
