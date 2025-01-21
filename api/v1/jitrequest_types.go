@@ -51,6 +51,12 @@ type JitRequestStatus struct {
 	Message string `json:"message,omitempty"`
 	// Jira ticket for jit request
 	JiraTicket string `json:"jiraTicket,omitempty"`
+	// Start time for the JIT access, i.e. "2024-12-04T21:00:00Z"
+	// ISO 8601 format
+	StartTime metav1.Time `json:"startTime"`
+	// End time for the JIT access, i.e. "2024-12-04T22:00:00Z"
+	// ISO 8601 format
+	EndTime metav1.Time `json:"endTime"`
 }
 
 // +kubebuilder:object:root=true
