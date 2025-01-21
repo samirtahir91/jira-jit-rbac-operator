@@ -31,7 +31,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	justintimev1 "jira-jit-rbac-operator/api/v1"
-	v1 "jira-jit-rbac-operator/api/v1"
 	"jira-jit-rbac-operator/pkg/configuration"
 )
 
@@ -104,7 +103,7 @@ func (c *JustInTimeConfigReconciler) SaveConfigToFile(ctx context.Context, cfg c
 	ConfigLock.Lock()
 	defer ConfigLock.Unlock()
 
-	configData := v1.JustInTimeConfigSpec{
+	configData := justintimev1.JustInTimeConfigSpec{
 		AllowedClusterRoles:       cfg.AllowedClusterRoles(),
 		JiraWorkflowApproveStatus: cfg.JiraWorkflowApproveStatus(),
 		RejectedTransitionID:      cfg.RejectedTransitionID(),
