@@ -230,7 +230,7 @@ func CreateJitRequest(
 }
 
 // Function to create a JustInTimeConfig
-func CreateJitConfig(ctx context.Context, k8sClient client.Client, clusterRole string) error {
+func CreateJitConfig(ctx context.Context, k8sClient client.Client, clusterRole, namespace string) error {
 
 	jitCfg := &justintimev1.JustInTimeConfig{
 		ObjectMeta: metav1.ObjectMeta{
@@ -244,8 +244,9 @@ func CreateJitConfig(ctx context.Context, k8sClient client.Client, clusterRole s
 			RejectedTransitionID:      "21",
 			JiraProject:               "IAM",
 			JiraIssueType:             "Access Request",
-			ApprovedTransitionID:      "41",
+			CompletedTransitionID:     "41",
 			AdditionalCommentText:     "config: default",
+			NamespaceAllowedRegex:     fmt.Sprintf("^%s$", namespace),
 			Labels: []string{
 				"default-config",
 			},

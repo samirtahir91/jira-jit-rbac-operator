@@ -24,10 +24,11 @@ type Configuration interface {
 	RejectedTransitionID() string
 	JiraProject() string
 	JiraIssueType() string
-	ApprovedTransitionID() string
+	CompletedTransitionID() string
 	CustomFields() map[string]justintimev1.CustomFieldSettings
 	RequiredFields() *justintimev1.RequiredFieldsSpec
 	Labels() []string
 	AdditionalCommentText() string
 	Environment() *justintimev1.EnvironmentSpec
+	NamespaceAllowedRegex() string
 }

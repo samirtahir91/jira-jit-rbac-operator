@@ -33,7 +33,7 @@ type JustInTimeConfigSpec struct {
 	// The Jira issue type
 	JiraIssueType string `json:"jiraIssueType" validate:"required"`
 	// The workflow transition ID for an approved ticket
-	ApprovedTransitionID string `json:"approvedTransitionID" validate:"required"`
+	CompletedTransitionID string `json:"completedTransitionID" validate:"required"`
 	// Required fields for the Jira ticket
 	RequiredFields *RequiredFieldsSpec `json:"requiredFields"`
 	// Optional additional fields to map to the ticket and enforce on a JitRequest's jiraFields
@@ -44,6 +44,8 @@ type JustInTimeConfigSpec struct {
 	Environment *EnvironmentSpec `json:"environment"`
 	// Optional text to add to jira ticket comment
 	AdditionalCommentText string `json:"additionalCommentText"`
+	// Optional regex to only allow namespace names matching the regular expression
+	NamespaceAllowedRegex string `json:"namespaceAllowedRegex,omitempty"`
 }
 
 // EnvironmentSpec defines the specification for the environment

@@ -12,11 +12,12 @@ controllerManager:
         - ALL
     env:
       debugLog: "false"
+      enableWebhooks: "false"
       jiraBaseUrl: http://my-jira-release.default.svc.cluster.local:80
     image:
-      repository: samirtahir91076/jira-jit-rbac-operator
+      repository: controller
       tag: latest
-    imagePullPolicy: Always
+    imagePullPolicy: Never
     resources:
       limits:
         cpu: 500m
@@ -41,4 +42,12 @@ metricsService:
     port: 8443
     protocol: TCP
     targetPort: 8443
+  type: ClusterIP
+webhook:
+  enabled: false
+webhookService:
+  ports:
+  - port: 443
+    protocol: TCP
+    targetPort: 9443
   type: ClusterIP

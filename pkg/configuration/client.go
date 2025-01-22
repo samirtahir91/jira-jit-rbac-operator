@@ -45,8 +45,9 @@ func NewJitRbacOperatorConfiguration(ctx context.Context, client client.Client, 
 						RejectedTransitionID:      "21",
 						JiraProject:               "IAM",
 						JiraIssueType:             "Access Request",
-						ApprovedTransitionID:      "41",
+						CompletedTransitionID:     "41",
 						AdditionalCommentText:     "config: default",
+						NamespaceAllowedRegex:     ".*",
 						Labels: []string{
 							"default-config",
 						},
@@ -72,6 +73,10 @@ func NewJitRbacOperatorConfiguration(ctx context.Context, client client.Client, 
 
 		return config
 	}}
+}
+
+func (c *jitRbacOperatorConfiguration) NamespaceAllowedRegex() string {
+	return c.retrievalFn().Spec.NamespaceAllowedRegex
 }
 
 func (c *jitRbacOperatorConfiguration) Environment() *justintimev1.EnvironmentSpec {
@@ -106,8 +111,8 @@ func (c *jitRbacOperatorConfiguration) JiraIssueType() string {
 	return c.retrievalFn().Spec.JiraIssueType
 }
 
-func (c *jitRbacOperatorConfiguration) ApprovedTransitionID() string {
-	return c.retrievalFn().Spec.ApprovedTransitionID
+func (c *jitRbacOperatorConfiguration) CompletedTransitionID() string {
+	return c.retrievalFn().Spec.CompletedTransitionID
 }
 
 func (c *jitRbacOperatorConfiguration) CustomFields() map[string]justintimev1.CustomFieldSettings {

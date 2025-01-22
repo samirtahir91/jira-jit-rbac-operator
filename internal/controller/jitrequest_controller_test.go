@@ -88,7 +88,7 @@ var _ = Describe("JitRequest Controller", Ordered, func() {
 	Context("When creating the JustInTime config object", func() {
 		It("should successfully load the config and write the config file", func() {
 			By("Creating the operator JustInTimeConfig")
-			err := utils.CreateJitConfig(ctx, k8sClient, ValidClusterRole)
+			err := utils.CreateJitConfig(ctx, k8sClient, ValidClusterRole, TestNamespace)
 			Expect(err).NotTo(HaveOccurred())
 		})
 	})

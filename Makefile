@@ -61,7 +61,11 @@ vet: ## Run go vet against code.
 
 .PHONY: test
 test: manifests generate fmt vet envtest ## Run tests.
-	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test $$(go list ./... | grep -v -E '/e2e|/config|/utils|/cmd|/api') -v -ginkgo.v -coverprofile cover.out
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test $$(go list ./... | grep -v -E '/e2e|/config|/utils|/cmd|/api|/webhook') -v -ginkgo.v -coverprofile cover.out
+
+.PHONY: test-webhooks
+test-webhooks: manifests generate fmt vet envtest ## Run tests.
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test ./internal/webhook/v1 -v -ginkgo.v -coverprofile cover.out
 
 # TODO(user): To use a different vendor for e2e tests, modify the setup under 'tests/e2e'.
 # The default setup assumes Kind is pre-installed and builds/loads the Manager Docker image locally.
@@ -210,11 +214,11 @@ HELMIFY ?= $(LOCALBIN)/helmify
 .PHONY: helmify
 helmify: $(HELMIFY) ## Download helmify locally if necessary.
 $(HELMIFY): $(LOCALBIN)
-	test -s $(LOCALBIN)/helmify || GOBIN=$(LOCALBIN) go install github.com/arttor/helmify/cmd/helmify@v0.4.14
+	test -s $(LOCALBIN)/helmify || GOBIN=$(LOCALBIN) go install github.com/arttor/helmify/cmd/helmify@v0.4.17
 
 helm: manifests kustomize helmify
 	cd config/manager && $(KUSTOMIZE) edit set image controller=${IMG}
-	$(KUSTOMIZE) build config/default | $(HELMIFY) charts/jira-jit-rbac-operator
+	$(KUSTOMIZE) build config/default | $(HELMIFY) -add-webhook-option charts/jira-jit-rbac-operator
 ##################################
 
 # go-install-tool will 'go install' any package with custom target and name of binary, if it doesn't exist
