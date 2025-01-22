@@ -19,7 +19,7 @@ controllerManager:
       enableWebhooks: "true"
       jiraBaseUrl: http://my-jira-release.default.svc.cluster.local:80
     image:
-      repository: jira-jit-rbac-operator
+      repository: samirtahir91076/jira-jit-rbac-operator
       tag: latest
     imagePullPolicy: Never
     resources:
