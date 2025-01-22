@@ -1,3 +1,9 @@
+[![Lint](https://github.com/samirtahir91/jira-jit-rbac-operator/actions/workflows/lint.yml/badge.svg)](https://github.com/samirtahir91/jira-jit-rbac-operator/actions/workflows/lint.yml)
+[![Integration tests](https://github.com/samirtahir91/jira-jit-rbac-operator/actions/workflows/integration-test.yaml/badge.svg)](https://github.com/samirtahir91/jira-jit-rbac-operator/actions/workflows/integration-test.yaml)
+[![Webhook Integration tests](https://github.com/samirtahir91/jira-jit-rbac-operator/actions/workflows/webhook-integration-tests.yaml/badge.svg)](https://github.com/samirtahir91/jira-jit-rbac-operator/actions/workflows/webhook-integration-tests.yaml)
+[![Build and push](https://github.com/samirtahir91/jira-jit-rbac-operator/actions/workflows/build-and-push.yml/badge.svg)](https://github.com/samirtahir91/jira-jit-rbac-operator/actions/workflows/build-and-push.yml)
+[![Coverage Status](https://coveralls.io/repos/github/samirtahir91/jira-jit-rbac-operator/badge.svg?branch=main)](https://coveralls.io/github/samirtahir91/jira-jit-rbac-operator?branch=main)
+
 # jira-jit-rbac-operator 
 
 The `jira-jit-rbac-operator` is a Kubernetes operator that creates short-lived rolebindings for users based on a JitRequest custom resource. It integrates with a configurable Jira Workflow, the operator submitts a Jira ticket in a Jira Project for approval by a Human before granting the role-binding for the requested time period. It empowers self-service of Just-In-Time privileged access using Kubernetes RBAC.
