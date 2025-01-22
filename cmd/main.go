@@ -42,6 +42,7 @@ import (
 	justintimev1 "jira-jit-rbac-operator/api/v1"
 	"jira-jit-rbac-operator/internal/config"
 	"jira-jit-rbac-operator/internal/controller"
+	webhookjustintimev1 "jira-jit-rbac-operator/internal/webhook/v1"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -201,6 +202,13 @@ func main() {
 	}).SetupWithManager(mgr, configurationName, configCacheFilePath); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "JustInTimeConfig")
 		os.Exit(1)
+	}
+	// nolint:goconst
+	if os.Getenv("ENABLE_WEBHOOKS") == "true" {
+		if err = webhookjustintimev1.SetupJitRequestWebhookWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "JitRequest")
+			os.Exit(1)
+		}
 	}
 	// +kubebuilder:scaffold:builder
 

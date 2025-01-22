@@ -3,7 +3,6 @@
 The `jira-jit-rbac-operator` is a Kubernetes operator that creates short-lived rolebindings for users based on a JitRequest custom resource. It integrates with a configurable Jira Workflow, the operator submitts a Jira ticket in a Jira Project for approval by a Human before granting the role-binding for the requested time period. It empowers self-service of Just-In-Time privileged access using Kubernetes RBAC.
 
 ## ToDo
-- Optional OPA policy or Validating Webhook that compares with JustInTimeConfig customFields.
 
 ## Description
 
@@ -54,19 +53,19 @@ You will need to create the required custom fields in Jira to be used by the wor
 The sample workflow used is [here](samples/workflow.xml), you need to [import](https://confluence.atlassian.com/display/ADMINJIRASERVER088/Using+XML+to+create+a+workflow)/create an identical Workflow in your Jira Project (the IDs of fields etc are configurable as below).
 
 You must define these with the values according to your Jira Project and Workflow (to map the fields from your workflow to the opertor's config):
-  - allowedClusterRoles
-  - workflowApprovedStatus
-  - rejectedTransitionID
-  - jiraProject
-  - jiraIssueType
-  - approvedTransitionID
-  - requiredFields
-  - labels (optional)
-  - environment (optional)
-  - additionalCommentText (optional)
-  - customFields
 
-The `customFields` is completely configurable to what fields you want a user to define a value for in a `JitRequest`\
+| **Field**                | **Description**                                                                 |
+|--------------------------|---------------------------------------------------------------------------------|
+| `workflowApprovedStatus` | The status indicating that the workflow has been approved in the Jira workflow. |
+| `rejectedTransitionID`   | The ID of the transition used when a workflow is rejected.                      |
+| `jiraProject`            | The Jira project associated with the request.                                   |
+| `jiraIssueType`          | The type of Jira issue to be created.                                           |
+| `completedTransitionID`  | The ID of the transition used when a workflow is completed.                     |
+| `requiredFields`         | The type and id of the required fields in Jira.                                 |
+| `customFields`           | The type and id of the required fields in Jira for custom fields that need to   |
+|                          | be validated against the JiraFields in the request.                             |
+
+The `customFields` are completely configurable to what fields you want a user to define a value for in a `JitRequest`\
 Each custom field is sent in the payload to Jira on creation of a new issue.\
 This allows you to use whatever fields as per your workflow.
 
@@ -145,7 +144,7 @@ spec:
   rejectedTransitionID: "21"
   jiraProject: IAM
   jiraIssueType: Access Request
-  approvedTransitionID: "41"
+  completedTransitionID: "41"
   requiredFields:
     ClusterRole:
       type: "select"
@@ -182,6 +181,10 @@ A helm chart is generated using `make helm`.
 ```sh
 cd charts/jira-jit-rbac-operator
 helm upgrade --install -n jira-jit-rbac-operator-system <release_name> . --create-namespace
+
+# To install without webhooks use these flags
+  --set webhook.enabled=false \
+  --set controllerManager.manager.env.enableWebhooks="false"
 ```
 - You can use the latest public image on DockerHub - `samirtahir91076/jira-jit-rbac-operator:latest`
   - See [tags](https://hub.docker.com/r/samirtahir91076/jira-jit-rbac-operator/tags) 
@@ -218,6 +221,8 @@ kubectl apply -k config/samples/
 ```sh
 export OPERATOR_NAMESPACE=jira-jit-int-test
 USE_EXISTING_CLUSTER=true make test
+
+USE_EXISTING_CLUSTER=false make test-webhooks
 ```
 
 **Run the controller in the foreground for testing:**

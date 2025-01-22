@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"regexp"
 	"sync"
 
 	"k8s.io/apimachinery/pkg/runtime"
@@ -35,9 +36,10 @@ import (
 )
 
 var (
-	ConfigCacheFilePath string
-	ConfigFile          = "config.json"
-	ConfigLock          sync.RWMutex
+	ConfigCacheFilePath   string
+	ConfigFile            = "config.json"
+	ConfigLock            sync.RWMutex
+	NamespaceAllowedRegex *regexp.Regexp
 )
 
 // JustInTimeConfigReconciler reconciles a JustInTimeConfig object
@@ -65,7 +67,7 @@ func (c *JustInTimeConfigReconciler) Reconcile(ctx context.Context, req ctrl.Req
 		"jira issue type",
 		cfg.JiraIssueType(),
 		"jira approve transition id",
-		cfg.ApprovedTransitionID(),
+		cfg.CompletedTransitionID(),
 		"jira custom fields",
 		cfg.CustomFields(),
 		"jira required fields",
@@ -76,7 +78,20 @@ func (c *JustInTimeConfigReconciler) Reconcile(ctx context.Context, req ctrl.Req
 		cfg.Labels(),
 		"additional comments",
 		cfg.AdditionalCommentText(),
+		"allowed namespace regex",
+		cfg.NamespaceAllowedRegex(),
 	)
+
+	// validate regex and set for global use
+	namespaceRegex := cfg.NamespaceAllowedRegex()
+	if namespaceRegex != "" {
+		var err error
+		NamespaceAllowedRegex, err = regexp.Compile(namespaceRegex)
+		if err != nil {
+			l.Error(err, "regex is invalid for namespaceAllowedRegex")
+			return ctrl.Result{}, err
+		}
+	}
 
 	// cache config to file
 	if err := c.SaveConfigToFile(ctx, cfg, ConfigCacheFilePath, ConfigFile); err != nil {
@@ -109,12 +124,13 @@ func (c *JustInTimeConfigReconciler) SaveConfigToFile(ctx context.Context, cfg c
 		RejectedTransitionID:      cfg.RejectedTransitionID(),
 		JiraProject:               cfg.JiraProject(),
 		JiraIssueType:             cfg.JiraIssueType(),
-		ApprovedTransitionID:      cfg.ApprovedTransitionID(),
+		CompletedTransitionID:     cfg.CompletedTransitionID(),
 		CustomFields:              cfg.CustomFields(),
 		RequiredFields:            cfg.RequiredFields(),
 		Environment:               cfg.Environment(),
 		Labels:                    cfg.Labels(),
 		AdditionalCommentText:     cfg.AdditionalCommentText(),
+		NamespaceAllowedRegex:     cfg.NamespaceAllowedRegex(),
 	}
 
 	data, err := json.MarshalIndent(configData, "", "  ")

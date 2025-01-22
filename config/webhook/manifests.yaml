@@ -1,0 +1,26 @@
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  name: validating-webhook-configuration
+webhooks:
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
+      path: /validate-justintime-samir-io-v1-jitrequest
+  failurePolicy: Fail
+  name: vjitrequest-v1.kb.io
+  rules:
+  - apiGroups:
+    - justintime.samir.io
+    apiVersions:
+    - v1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - jitrequests
+  sideEffects: None

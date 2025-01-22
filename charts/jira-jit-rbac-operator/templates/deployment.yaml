@@ -24,6 +24,8 @@ spec:
         command:
         - /manager
         env:
+        - name: ENABLE_WEBHOOKS
+          value: {{ quote .Values.controllerManager.manager.env.enableWebhooks }}
         - name: DEBUG_LOG
           value: {{ quote .Values.controllerManager.manager.env.debugLog }}
         - name: OPERATOR_NAMESPACE

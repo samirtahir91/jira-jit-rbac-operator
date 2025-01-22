@@ -184,7 +184,7 @@ var _ = BeforeSuite(func() {
 	err = (&config.JustInTimeConfigReconciler{
 		Client: k8sManager.GetClient(),
 		Scheme: k8sManager.GetScheme(),
-	}).SetupWithManager(k8sManager, TestJitConfig, "/tmp/jit-test/")
+	}).SetupWithManager(k8sManager, TestJitConfig, "/tmp/jit-test")
 	Expect(err).ToNot(HaveOccurred())
 
 	go func() {

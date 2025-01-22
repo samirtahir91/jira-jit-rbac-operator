@@ -18,7 +18,6 @@ package controller
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
@@ -45,7 +44,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	justintimev1 "jira-jit-rbac-operator/api/v1"
-	"jira-jit-rbac-operator/internal/config"
+	utils "jira-jit-rbac-operator/pkg/utils"
 )
 
 var (
@@ -79,7 +78,7 @@ func (r *JitRequestReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	}
 
 	// Fetch operator config
-	operatorConfig, err := r.readConfigFromFile(config.ConfigCacheFilePath, config.ConfigFile)
+	operatorConfig, err := utils.ReadConfigFromFile()
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -88,7 +87,7 @@ func (r *JitRequestReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	allowedClusterRoles := operatorConfig.AllowedClusterRoles
 	jiraProject := operatorConfig.JiraProject
 	jiraIssueType := operatorConfig.JiraIssueType
-	approvedTransitionID := operatorConfig.ApprovedTransitionID
+	completedTransitionID := operatorConfig.CompletedTransitionID
 	customFieldsConfig := operatorConfig.CustomFields
 	requiredFieldsConfig := operatorConfig.RequiredFields
 	ticketLabels := operatorConfig.Labels
@@ -104,7 +103,7 @@ func (r *JitRequestReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	case "":
 		return r.handleNewRequest(ctx, l, jitRequest, allowedClusterRoles, jiraProject, jiraIssueType, customFieldsConfig, requiredFieldsConfig, ticketLabels, targetEnvironment, additionalComments)
 	case StatusPreApproved:
-		return r.handlePreApproved(ctx, l, jitRequest, approvedTransitionID, jiraWorkflowApproveStatus)
+		return r.handlePreApproved(ctx, l, jitRequest, completedTransitionID, jiraWorkflowApproveStatus)
 	case StatusSucceeded:
 		return r.handleCleaup(ctx, l, jitRequest)
 	default:
@@ -135,25 +134,6 @@ func (r *JitRequestReconciler) handleFetchError(
 	}
 	l.Error(err, "failed to get JitRequest")
 	return ctrl.Result{}, err
-}
-
-// Read operator configuration from config file
-func (r *JitRequestReconciler) readConfigFromFile(filePath string, fileName string) (*justintimev1.JustInTimeConfigSpec, error) {
-	// common lock for concurrent reads
-	config.ConfigLock.RLock()
-	defer config.ConfigLock.RUnlock()
-
-	data, err := os.ReadFile(fmt.Sprintf("%s/%s", filePath, fileName))
-	if err != nil {
-		return nil, fmt.Errorf("failed to read configuration file: %w", err)
-	}
-
-	var config justintimev1.JustInTimeConfigSpec
-	if err := json.Unmarshal(data, &config); err != nil {
-		return nil, fmt.Errorf("failed to parse configuration file: %w", err)
-	}
-
-	return &config, nil
 }
 
 // Reject Jira ticket and delete JitRequest
@@ -222,12 +202,18 @@ func (r *JitRequestReconciler) handleNewRequest(
 	}
 
 	// check cluster role is allowed
-	if !contains(allowedClusterRoles, jitRequest.Spec.ClusterRole) {
+	if !utils.Contains(allowedClusterRoles, jitRequest.Spec.ClusterRole) {
 		return r.rejectInvalidRole(ctx, l, jitRequest, jiraIssueKey)
 	}
 
 	// check namespace labels match namespace(s)
 	ns, err := r.validateNamespaceLabels(ctx, jitRequest)
+	if err != nil {
+		return r.rejectInvalidNamespace(ctx, l, jitRequest, jiraIssueKey, ns, err.Error())
+	}
+
+	// check namespaces match regex defined in config
+	ns, err = utils.ValidateNamespaceRegex(jitRequest.Spec.Namespaces)
 	if err != nil {
 		return r.rejectInvalidNamespace(ctx, l, jitRequest, jiraIssueKey, ns, err.Error())
 	}
@@ -339,7 +325,7 @@ func (r *JitRequestReconciler) handlePreApproved(
 	ctx context.Context,
 	l logr.Logger,
 	jitRequest *justintimev1.JitRequest,
-	approvedTransitionID, jiraWorkflowApproveStatus string,
+	completedTransitionID, jiraWorkflowApproveStatus string,
 ) (ctrl.Result, error) {
 	// check if needs to be re-queued
 	startTime := jitRequest.Status.StartTime.Time
@@ -367,7 +353,7 @@ func (r *JitRequestReconciler) handlePreApproved(
 		return ctrl.Result{}, err
 	}
 
-	if err := r.completeJiraTicket(ctx, jitRequest, approvedTransitionID); err != nil {
+	if err := r.completeJiraTicket(ctx, jitRequest, completedTransitionID); err != nil {
 		return ctrl.Result{}, err
 	}
 
@@ -420,7 +406,7 @@ func (r *JitRequestReconciler) updateJiraTicket(ctx context.Context, jiraTicket,
 }
 
 // Complete jira with comment
-func (r *JitRequestReconciler) completeJiraTicket(ctx context.Context, jitRequest *justintimev1.JitRequest, approvedTransitionID string) error {
+func (r *JitRequestReconciler) completeJiraTicket(ctx context.Context, jitRequest *justintimev1.JitRequest, completedTransitionID string) error {
 	l := log.FromContext(ctx)
 
 	// Add a comment to the Jira issue
@@ -439,7 +425,7 @@ func (r *JitRequestReconciler) completeJiraTicket(ctx context.Context, jitReques
 			},
 		},
 	}
-	response, err := r.JiraClient.Issue.Move(context.Background(), jiraTicket, approvedTransitionID, options)
+	response, err := r.JiraClient.Issue.Move(context.Background(), jiraTicket, completedTransitionID, options)
 	if err != nil {
 		if response != nil {
 			body := response.Bytes.String()
@@ -705,16 +691,6 @@ func (r *JitRequestReconciler) raiseEvent(obj client.Object, eventType, reason, 
 	}
 
 	r.Recorder.Event(eventRef, eventType, reason, message)
-}
-
-// checks if a string is present in a slice.
-func contains(slice []string, item string) bool {
-	for _, s := range slice {
-		if s == item {
-			return true
-		}
-	}
-	return false
 }
 
 // Delete rolebinding in case of k8s GC failed to delete

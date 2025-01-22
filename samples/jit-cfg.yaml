@@ -8,6 +8,7 @@ spec:
     - edit
   labels:
     - minikube-test
+  namespaceAllowedRegex: ".*"
   environment:
     environment: local
     cluster: minikube
@@ -16,7 +17,7 @@ spec:
   rejectedTransitionID: "21"
   jiraProject: IAM
   jiraIssueType: Access Request
-  approvedTransitionID: "41"
+  completedTransitionID: "41"
   requiredFields:
     ClusterRole:
       type: "select"
