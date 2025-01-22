@@ -1,9 +1,0 @@
-apiVersion: justintime.samir.io/v1
-kind: JustInTimeConfig
-metadata:
-  name: {{ include "jira-jit-rbac-operator.fullname" . }}-default
-  labels:
-  {{- include "jira-jit-rbac-operator.labels" . | nindent 4 }}
-spec:
-  allowedClusterRoles:
-  - edit
