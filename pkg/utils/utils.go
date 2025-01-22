@@ -77,7 +77,11 @@ func ValidateNamespaceRegex(namespaces []string) (string, error) {
 }
 
 // Validate namespace(s) have namespaceLabels
-func ValidateNamespaceLabels(ctx context.Context, jitRequest *justintimev1.JitRequest, r client.Client) (string, error) {
+func ValidateNamespaceLabels(
+	ctx context.Context,
+	jitRequest *justintimev1.JitRequest,
+	r client.Client,
+) (string, error) {
 	for _, namespace := range jitRequest.Spec.Namespaces {
 		ns := &corev1.Namespace{}
 		err := r.Get(ctx, client.ObjectKey{Name: namespace}, ns)
