@@ -4,7 +4,7 @@ kind: MutatingWebhookConfiguration
 metadata:
   name: {{ include "jira-jit-rbac-operator.fullname" . }}-validating-webhook-configuration
   annotations:
-    cert-manager.io/inject-ca-from: {{ .Release.Namespace }}/{{ include "jira-jit-rbac-operator.fullname" . }}-
+    cert-manager.io/inject-ca-from: {{ .Release.Namespace }}/{{ include "jira-jit-rbac-operator.fullname" . }}-serving-cert
   labels:
   {{- include "jira-jit-rbac-operator.labels" . | nindent 4 }}
 webhooks:

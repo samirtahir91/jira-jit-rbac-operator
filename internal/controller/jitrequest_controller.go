@@ -158,24 +158,6 @@ func (r *JitRequestReconciler) handleRejected(
 	return ctrl.Result{}, nil
 }
 
-// Validate namespace(s) have namespaceLabels
-func (r *JitRequestReconciler) validateNamespaceLabels(ctx context.Context, jitRequest *justintimev1.JitRequest) (string, error) {
-	for _, namespace := range jitRequest.Spec.Namespaces {
-		ns := &corev1.Namespace{}
-		err := r.Get(ctx, client.ObjectKey{Name: namespace}, ns)
-		if err != nil {
-			return namespace, fmt.Errorf("failed to get namespace %s: %v", namespace, err)
-		}
-
-		for key, value := range jitRequest.Spec.NamespaceLabels {
-			if ns.Labels[key] != value {
-				return namespace, fmt.Errorf("namespace %s does not have the label %s=%s", namespace, key, value)
-			}
-		}
-	}
-	return "", nil
-}
-
 // Create new Jira ticket for new JitRequests, validate config
 func (r *JitRequestReconciler) handleNewRequest(
 	ctx context.Context,
@@ -207,7 +189,7 @@ func (r *JitRequestReconciler) handleNewRequest(
 	}
 
 	// check namespace labels match namespace(s)
-	ns, err := r.validateNamespaceLabels(ctx, jitRequest)
+	ns, err := utils.ValidateNamespaceLabels(ctx, jitRequest, r.Client)
 	if err != nil {
 		return r.rejectInvalidNamespace(ctx, l, jitRequest, jiraIssueKey, ns, err.Error())
 	}
@@ -411,7 +393,7 @@ func (r *JitRequestReconciler) completeJiraTicket(ctx context.Context, jitReques
 
 	// Add a comment to the Jira issue
 	jiraTicket := jitRequest.Status.JiraTicket
-	comment := fmt.Sprintf("{color:#00875a}*Completed - %s*{color}", jitRequest.Status.Message)
+	comment := "{color:#00875a}*Completed - Access granted until end time*{color}"
 	l.Info("Completing Jira ticket", "jiraTicket", jiraTicket)
 	if err := r.updateJiraTicket(ctx, jiraTicket, comment); err != nil {
 		return err

@@ -12,8 +12,8 @@ spec:
     - bar
   namespaceLabels:
     foo: bar
-  startTime: 2025-01-18T11:48:10Z
-  endTime: 2025-01-18T11:51:10Z
+  startTime: 2025-01-22T19:04:00Z
+  endTime: 2025-01-22T19:05:00Z
   clusterRole: edit
   jiraFields:
     Approver: admin

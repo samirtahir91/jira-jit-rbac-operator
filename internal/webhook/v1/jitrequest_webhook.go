@@ -71,7 +71,7 @@ func validateJitRequestSpec(jitRequest *justintimev1.JitRequest) (*field.Error, 
 	// check cluster role is allowed
 	allowedClusterRoles := operatorConfig.AllowedClusterRoles
 	allowedClusterRolesString := strings.Join(allowedClusterRoles, ", ")
-	msg := fmt.Sprintf("clusterRole must be one of %s", allowedClusterRolesString)
+	msg := fmt.Sprintf("clusterRole must be one of '%s'", allowedClusterRolesString)
 	if !utils.Contains(allowedClusterRoles, jitRequest.Spec.ClusterRole) {
 		return field.Invalid(field.NewPath("spec").Child("clusterRole"), jitRequest.Spec.ClusterRole, msg), nil
 	}

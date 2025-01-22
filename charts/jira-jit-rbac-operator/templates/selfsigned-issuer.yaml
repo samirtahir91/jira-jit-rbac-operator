@@ -1,0 +1,13 @@
+{{- if .Values.webhook.enabled }}
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: {{ include "jira-jit-rbac-operator.fullname" . }}-selfsigned-issuer
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "1"
+  labels:
+  {{- include "jira-jit-rbac-operator.labels" . | nindent 4 }}
+spec:
+  selfSigned: {}
+{{- end }}

@@ -1,3 +1,6 @@
+certmanager:
+  enabled: false
+  installCRDs: true
 controllerManager:
   manager:
     args:
@@ -5,6 +8,7 @@ controllerManager:
     - --leader-elect
     - --health-probe-bind-address=:8081
     - --configuration-name=jira-jit-rbac-operator-default
+    - --webhook-cert-path=/tmp/k8s-webhook-server/serving-certs
     containerSecurityContext:
       allowPrivilegeEscalation: false
       capabilities:
@@ -12,10 +16,10 @@ controllerManager:
         - ALL
     env:
       debugLog: "false"
-      enableWebhooks: "false"
+      enableWebhooks: "true"
       jiraBaseUrl: http://my-jira-release.default.svc.cluster.local:80
     image:
-      repository: controller
+      repository: jira-jit-rbac-operator
       tag: latest
     imagePullPolicy: Never
     resources:
@@ -44,7 +48,7 @@ metricsService:
     targetPort: 8443
   type: ClusterIP
 webhook:
-  enabled: false
+  enabled: true
 webhookService:
   ports:
   - port: 443

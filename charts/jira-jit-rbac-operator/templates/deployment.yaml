@@ -51,6 +51,12 @@ spec:
           initialDelaySeconds: 15
           periodSeconds: 20
         name: manager
+        ports:
+      {{- if .Values.webhook.enabled }}
+        - containerPort: 9443
+          name: webhook-server
+          protocol: TCP
+      {{- end }}
         readinessProbe:
           httpGet:
             path: /readyz
@@ -64,6 +70,9 @@ spec:
         volumeMounts:
         - mountPath: /var/run/jit-rbac-configuration
           name: jit-rbac-config
+        - mountPath: /tmp/k8s-webhook-server/serving-certs
+          name: webhook-certs
+          readOnly: true
       securityContext: {{- toYaml .Values.controllerManager.podSecurityContext | nindent
         8 }}
       serviceAccountName: {{ include "jira-jit-rbac-operator.fullname" . }}-controller-manager
@@ -71,3 +80,6 @@ spec:
       volumes:
       - emptyDir: {}
         name: jit-rbac-config
+      - name: webhook-certs
+        secret:
+          secretName: webhook-server-cert

@@ -17,13 +17,18 @@ limitations under the License.
 package utils
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	justintimev1 "jira-jit-rbac-operator/api/v1"
+
+	corev1 "k8s.io/api/core/v1"
+
 	"jira-jit-rbac-operator/internal/config"
 	"os"
 
 	"k8s.io/apimachinery/pkg/util/validation/field"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // Read operator configuration from config file
@@ -65,6 +70,24 @@ func ValidateNamespaceRegex(namespaces []string) (string, error) {
 					namespace,
 					fmt.Sprintf("namespace does not match the allowed pattern: %s", config.NamespaceAllowedRegex.String()),
 				)
+			}
+		}
+	}
+	return "", nil
+}
+
+// Validate namespace(s) have namespaceLabels
+func ValidateNamespaceLabels(ctx context.Context, jitRequest *justintimev1.JitRequest, r client.Client) (string, error) {
+	for _, namespace := range jitRequest.Spec.Namespaces {
+		ns := &corev1.Namespace{}
+		err := r.Get(ctx, client.ObjectKey{Name: namespace}, ns)
+		if err != nil {
+			return namespace, fmt.Errorf("failed to get namespace %s: %v", namespace, err)
+		}
+
+		for key, value := range jitRequest.Spec.NamespaceLabels {
+			if ns.Labels[key] != value {
+				return namespace, fmt.Errorf("namespace %s does not have the label %s=%s", namespace, key, value)
 			}
 		}
 	}

@@ -1,5 +1,5 @@
 # Image URL to use all building/pushing image targets
-IMG ?= controller:latest
+IMG ?= jira-jit-rbac-operator:latest
 # ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
 ENVTEST_K8S_VERSION = 1.31.0
 
@@ -218,7 +218,7 @@ $(HELMIFY): $(LOCALBIN)
 
 helm: manifests kustomize helmify
 	cd config/manager && $(KUSTOMIZE) edit set image controller=${IMG}
-	$(KUSTOMIZE) build config/default | $(HELMIFY) -add-webhook-option charts/jira-jit-rbac-operator
+	$(KUSTOMIZE) build config/default | $(HELMIFY) -cert-manager-as-subchart -add-webhook-option charts/jira-jit-rbac-operator
 ##################################
 
 # go-install-tool will 'go install' any package with custom target and name of binary, if it doesn't exist
