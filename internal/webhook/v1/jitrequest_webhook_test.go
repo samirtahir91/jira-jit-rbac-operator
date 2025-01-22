@@ -57,7 +57,6 @@ var _ = Describe("JitRequest Webhook", Ordered, func() {
 	)
 
 	BeforeAll(func() {
-
 		By("removing manager config")
 		cmd := exec.Command("kubectl", "delete", "jitcfg", TestJitConfig)
 		_, _ = utils.Run(cmd)
@@ -103,6 +102,13 @@ var _ = Describe("JitRequest Webhook", Ordered, func() {
 			By("Creating the operator JustInTimeConfig")
 			err := utils.CreateJitConfig(ctx, k8sClient, ValidClusterRole, TestNamespace)
 			Expect(err).NotTo(HaveOccurred())
+
+			By("Ensuring the config file is written")
+			configFilePath := "/tmp/jit-test/config.json"
+			Eventually(func() bool {
+				_, err := os.Stat(configFilePath)
+				return err == nil
+			}, time.Second*5, time.Millisecond*100).Should(BeTrue(), "Config file was not created in time")
 		})
 	})
 
