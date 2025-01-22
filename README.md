@@ -136,6 +136,7 @@ spec:
     - edit
   labels:
     - minikube-test
+  namespaceAllowedRegex: ".*"
   environment:
     environment: local
     cluster: minikube
