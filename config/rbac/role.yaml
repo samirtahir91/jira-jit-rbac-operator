@@ -5,9 +5,17 @@ metadata:
   name: manager-role
 rules:
 - apiGroups:
+  - ""
+  resources:
+  - namespaces
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
   - justintime.samir.io
   resources:
-  - justintimeconfigs
+  - jitrequests
   verbs:
   - create
   - delete
@@ -19,14 +27,39 @@ rules:
 - apiGroups:
   - justintime.samir.io
   resources:
+  - jitrequests/finalizers
   - justintimeconfigs/finalizers
   verbs:
   - update
 - apiGroups:
   - justintime.samir.io
   resources:
+  - jitrequests/status
   - justintimeconfigs/status
   verbs:
   - get
   - patch
   - update
+- apiGroups:
+  - justintime.samir.io
+  resources:
+  - justintimeconfigs
+  verbs:
+  - create
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - rbac.authorization.k8s.io
+  resources:
+  - rolebindings
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
