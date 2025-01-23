@@ -174,6 +174,19 @@ var _ = Describe("JitRequest Webhook", Ordered, func() {
 				"namespace to fail if not matching a regex")
 		})
 
+		It("Should deny creation if any namespace is not matching required labels if defined", func() {
+			By("simulating a invalid namespace")
+			label := "foo"
+			labelValue := "bar"
+			obj.Spec.NamespaceLabels = map[string]string{
+				label: labelValue,
+			}
+			msg := fmt.Sprintf("the following namespaces do not match the specified labels (%s=%s): [%s]", label, labelValue, TestNamespace)
+			Expect(validator.ValidateCreate(ctx, obj)).Error().To(
+				MatchError(ContainSubstring(msg)),
+				"namespace to fail if not matching defined labels")
+		})
+
 		It("Should deny creation if any JiraField is missing if it is a defined CustomField in config", func() {
 			By("simulating a invalid endTime")
 			obj.Spec.JiraFields = map[string]string{

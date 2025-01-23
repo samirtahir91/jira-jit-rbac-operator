@@ -189,15 +189,17 @@ func (r *JitRequestReconciler) handleNewRequest(
 	}
 
 	// check namespace labels match namespace(s)
-	ns, err := utils.ValidateNamespaceLabels(ctx, jitRequest, r.Client)
-	if err != nil {
-		return r.rejectInvalidNamespace(ctx, l, jitRequest, jiraIssueKey, ns, err.Error())
+	if os.Getenv("ENABLE_WEBHOOKS") != "true" { // ignore if handled by webnhook
+		ns, err := utils.ValidateNamespaceLabels(ctx, jitRequest, r.Client)
+		if err != nil {
+			return r.rejectInvalidNamespace(ctx, l, jitRequest, jiraIssueKey, strings.Join(ns, ", "), err.Error())
+		}
 	}
 
 	// check namespaces match regex defined in config
-	ns, err = utils.ValidateNamespaceRegex(jitRequest.Spec.Namespaces)
+	nsRegex, err := utils.ValidateNamespaceRegex(jitRequest.Spec.Namespaces)
 	if err != nil {
-		return r.rejectInvalidNamespace(ctx, l, jitRequest, jiraIssueKey, ns, err.Error())
+		return r.rejectInvalidNamespace(ctx, l, jitRequest, jiraIssueKey, nsRegex, err.Error())
 	}
 
 	return r.preApproveRequest(ctx, l, jitRequest, jiraIssueKey, additionalComments)
@@ -210,7 +212,7 @@ func (r *JitRequestReconciler) rejectInvalidNamespace(
 	jitRequest *justintimev1.JitRequest,
 	jiraIssueKey, namespace, err string,
 ) (ctrl.Result, error) {
-	errorMsg := fmt.Sprintf("Namespace %s is not validated | Error: %s", namespace, err)
+	errorMsg := fmt.Sprintf("Namespace(s) %s not validated | Error: %s", namespace, err)
 	r.raiseEvent(jitRequest, "Warning", EventValidationFailed, errorMsg)
 	if err := r.updateStatus(ctx, jitRequest, StatusRejected, errorMsg, jiraIssueKey, 3); err != nil {
 		l.Error(err, "failed to update status to Rejected")
