@@ -1,4 +1,71 @@
 apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "jira-jit-rbac-operator.fullname" . }}-manager-role
+  labels:
+  {{- include "jira-jit-rbac-operator.labels" . | nindent 4 }}
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - namespaces
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - justintime.samir.io
+  resources:
+  - jitrequests
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - justintime.samir.io
+  resources:
+  - jitrequests/finalizers
+  - justintimeconfigs/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - justintime.samir.io
+  resources:
+  - jitrequests/status
+  - justintimeconfigs/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - justintime.samir.io
+  resources:
+  - justintimeconfigs
+  verbs:
+  - create
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - rbac.authorization.k8s.io
+  resources:
+  - rolebindings
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
   name: {{ include "jira-jit-rbac-operator.fullname" . }}-manager-rolebinding
@@ -7,7 +74,7 @@ metadata:
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: cluster-admin
+  name: '{{ include "jira-jit-rbac-operator.fullname" . }}-manager-role'
 subjects:
 - kind: ServiceAccount
   name: '{{ include "jira-jit-rbac-operator.fullname" . }}-controller-manager'
