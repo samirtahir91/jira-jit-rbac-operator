@@ -215,31 +215,6 @@ var _ = Describe("JitRequest Controller", Ordered, func() {
 		})
 	})
 
-	Context("When creating a new JitRequest with a start time 10s from now and for a non-existing Namespace", func() {
-		It("should successfully process as a new request and reject the Jira and JitRequest", func() {
-			By("Creating and approving the JitRequest")
-			TestJiraWorkflowApproveStatus = TestJiraWorkflowApproved
-			_, err := utils.CreateJitRequest(ctx, k8sClient, 10, ValidClusterRole, InvalidNamespace)
-			Expect(err).NotTo(HaveOccurred())
-
-			By("Waiting for the JitRequest Rejected event to be recorded")
-			err = utils.CheckEvent(
-				ctx,
-				k8sClient,
-				JitRequestName,
-				TestNamespace,
-				"Warning",
-				EventValidationFailed,
-				fmt.Sprintf("Namespace %s is not validated | Error: failed to get namespace %s: Namespace \"%s\" not found", InvalidNamespace, InvalidNamespace, InvalidNamespace),
-			)
-			Expect(err).NotTo(HaveOccurred())
-
-			By("Checking the JitRequest is eventually removed")
-			err = utils.CheckJitRemoved(ctx, k8sClient, JitRequestName)
-			Expect(err).NotTo(HaveOccurred())
-		})
-	})
-
 	Context("When creating a new JitRequest with a start time 10s from now and for a Namespace with non-matching label", func() {
 		It("should successfully process as a new request and reject the Jira and JitRequest", func() {
 			By("Creating and approving the JitRequest with a label match")
@@ -256,7 +231,7 @@ var _ = Describe("JitRequest Controller", Ordered, func() {
 				TestNamespace,
 				"Warning",
 				EventValidationFailed,
-				fmt.Sprintf("Namespace %s is not validated | Error: namespace %s does not have the label foo=%s", TestNamespace, TestNamespace, namespaceLabel),
+				fmt.Sprintf("Namespace(s) %s not validated | Error: the following namespaces do not match the specified labels (foo=%s): [%s]", TestNamespace, namespaceLabel, TestNamespace),
 			)
 			Expect(err).NotTo(HaveOccurred())
 

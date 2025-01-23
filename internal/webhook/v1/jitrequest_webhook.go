@@ -25,6 +25,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
@@ -36,9 +37,11 @@ import (
 // nolint:unused
 // log is for logging in this package.
 var jitrequestlog = logf.Log.WithName("jitrequest-resource")
+var globalClient client.Client
 
 // SetupJitRequestWebhookWithManager registers the webhook for JitRequest in the manager.
 func SetupJitRequestWebhookWithManager(mgr ctrl.Manager) error {
+	globalClient = mgr.GetClient()
 	return ctrl.NewWebhookManagedBy(mgr).For(&justintimev1.JitRequest{}).
 		WithValidator(&JitRequestCustomValidator{}).
 		Complete()
@@ -54,13 +57,12 @@ func SetupJitRequestWebhookWithManager(mgr ctrl.Manager) error {
 // NOTE: The +kubebuilder:object:generate=false marker prevents controller-gen from generating DeepCopy methods,
 // as this struct is used only for temporary operations and does not need to be deeply copied.
 type JitRequestCustomValidator struct {
-	// TODO(user): Add more fields as needed for validation
 }
 
 var _ webhook.CustomValidator = &JitRequestCustomValidator{}
 
 // validateJitRequestSpec validates customFields from the applied JustInTimeConfig are defined in a JitRequest.JiraFields
-func validateJitRequestSpec(jitRequest *justintimev1.JitRequest) (*field.Error, error) {
+func validateJitRequestSpec(ctx context.Context, jitRequest *justintimev1.JitRequest) (*field.Error, error) {
 
 	// Fetch operator config
 	operatorConfig, err := utils.ReadConfigFromFile()
@@ -96,6 +98,12 @@ func validateJitRequestSpec(jitRequest *justintimev1.JitRequest) (*field.Error, 
 		return field.Invalid(field.NewPath("spec").Child("namespaces"), jitRequest.Spec.Namespaces, err.Error()), nil
 	}
 
+	// check namespace labels match namespace(s)
+	_, err = utils.ValidateNamespaceLabels(ctx, jitRequest, globalClient)
+	if err != nil {
+		return field.Invalid(field.NewPath("spec").Child("namespaces"), jitRequest.Spec.Namespaces, err.Error()), nil
+	}
+
 	// check customFields from config match jiraFields in JitRequest
 	customFieldsConfig := operatorConfig.CustomFields
 	for fieldName := range customFieldsConfig {
@@ -118,7 +126,7 @@ func (v *JitRequestCustomValidator) ValidateCreate(ctx context.Context, obj runt
 	}
 	jitrequestlog.Info("Validation for JitRequest upon creation", "name", jitrequest.GetName())
 
-	fieldErr, err := validateJitRequestSpec(jitrequest)
+	fieldErr, err := validateJitRequestSpec(ctx, jitrequest)
 	if err != nil {
 		return nil, err
 	}
@@ -136,7 +144,7 @@ func (v *JitRequestCustomValidator) ValidateUpdate(ctx context.Context, oldObj, 
 		return nil, fmt.Errorf("expected a JitRequest object for the newObj but got %T", newObj)
 	}
 	jitrequestlog.Info("Validation for JitRequest upon update", "name", jitrequest.GetName())
-	fieldErr, err := validateJitRequestSpec(jitrequest)
+	fieldErr, err := validateJitRequestSpec(ctx, jitrequest)
 	if err != nil {
 		return nil, err
 	}

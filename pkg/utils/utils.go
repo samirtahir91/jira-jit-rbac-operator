@@ -21,12 +21,14 @@ import (
 	"encoding/json"
 	"fmt"
 	justintimev1 "jira-jit-rbac-operator/api/v1"
+	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 
 	"jira-jit-rbac-operator/internal/config"
 	"os"
 
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -80,20 +82,50 @@ func ValidateNamespaceRegex(namespaces []string) (string, error) {
 func ValidateNamespaceLabels(
 	ctx context.Context,
 	jitRequest *justintimev1.JitRequest,
-	r client.Client,
-) (string, error) {
-	for _, namespace := range jitRequest.Spec.Namespaces {
-		ns := &corev1.Namespace{}
-		err := r.Get(ctx, client.ObjectKey{Name: namespace}, ns)
-		if err != nil {
-			return namespace, fmt.Errorf("failed to get namespace %s: %v", namespace, err)
-		}
+	k8sClient client.Client,
+) ([]string, error) {
 
-		for key, value := range jitRequest.Spec.NamespaceLabels {
-			if ns.Labels[key] != value {
-				return namespace, fmt.Errorf("namespace %s does not have the label %s=%s", namespace, key, value)
-			}
+	// if there are no namespace labels, skip and return
+	if len(jitRequest.Spec.NamespaceLabels) == 0 {
+		return nil, nil
+	}
+
+	// get all namespaces matching labels if defined in JitRequest
+	labelSelector := labels.SelectorFromSet(jitRequest.Spec.NamespaceLabels)
+	namespaceList := &corev1.NamespaceList{}
+	err := k8sClient.List(ctx, namespaceList, &client.ListOptions{LabelSelector: labelSelector})
+	if err != nil {
+		return nil, fmt.Errorf("failed to list namespaces: %v", err)
+	}
+
+	// make map of matching namespaces
+	validNamespaces := make(map[string]struct{})
+	for _, ns := range namespaceList.Items {
+		validNamespaces[ns.Name] = struct{}{}
+	}
+
+	// filter out non-matching namespaces
+	var invalidNamespaces []string
+	for _, namespace := range jitRequest.Spec.Namespaces {
+		if _, found := validNamespaces[namespace]; !found {
+			invalidNamespaces = append(invalidNamespaces, namespace)
 		}
 	}
-	return "", nil
+
+	// fmt label mmsg for error
+	labelPairs := make([]string, 0, len(jitRequest.Spec.NamespaceLabels))
+	for key, value := range jitRequest.Spec.NamespaceLabels {
+		labelPairs = append(labelPairs, fmt.Sprintf("%s=%s", key, value))
+	}
+	labelString := strings.Join(labelPairs, ", ")
+
+	// return invalid namespaces if any
+	if len(invalidNamespaces) > 0 {
+		return invalidNamespaces, fmt.Errorf(
+			"the following namespaces do not match the specified labels (%s): %v",
+			labelString, invalidNamespaces,
+		)
+	}
+
+	return nil, nil
 }
