@@ -19,9 +19,11 @@ package e2e
 import (
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -71,9 +73,28 @@ var _ = Describe("Manager", Ordered, func() {
 		_, err = utils.Run(cmd)
 		Expect(err).NotTo(HaveOccurred(), "Failed to create namespace")
 
+		By("creating jira stubs service in k8s")
+		cmd = exec.Command("kubectl", "-n", namespace, "create", "-f", "./test/manifests/stub_service.yaml")
+		_, err = utils.Run(cmd)
+		Expect(err).NotTo(HaveOccurred(), "Failed to create jira stub service in k8s")
+
 		By("deploying the controller-manager with Helm")
 		helmArgImg := fmt.Sprintf("controllerManager.manager.image.repository=%s", projectImageRepo)
 		helmArgImgTag := fmt.Sprintf("controllerManager.manager.image.tag=%s", projectImageTag)
+		var jiraBaseUrl string
+		if os.Getenv("TEST_OS") == "mac" {
+			// Get jiraStubsUrl and replace host for local Kind to connect on localhost on MAC OS
+			parsedURL, _ := url.Parse(ts.URL)
+			hostParts := strings.Split(parsedURL.Host, ":")
+			parsedURL.Host = fmt.Sprintf("host.docker.internal:%s", hostParts[1])
+			jiraBaseUrl = parsedURL.String()
+		} else {
+			// Linux - use docker bridge service
+			jiraBaseUrl = "http://dockerhost:8082"
+		}
+		helmArgJiraUrl := fmt.Sprintf("controllerManager.manager.env.jiraBaseUrl=%s", jiraBaseUrl)
+		helmArgEnvWebhook := "controllerManager.manager.env.enableWebhooks=false"
+		helmArgGlobalWebhook := "webhook.enabled=false"
 		helmSetArg := "--set"
 		cmd = exec.Command(
 			"helm",
@@ -86,6 +107,20 @@ var _ = Describe("Manager", Ordered, func() {
 			helmArgImg,
 			helmSetArg,
 			helmArgImgTag,
+			helmSetArg,
+			helmArgJiraUrl,
+			helmSetArg,
+			helmArgEnvWebhook,
+			helmSetArg,
+			helmArgGlobalWebhook,
+			helmSetArg,
+			"controllerManager.manager.args[0]=--metrics-bind-address=:8443",
+			helmSetArg,
+			"controllerManager.manager.args[1]=--leader-elect",
+			helmSetArg,
+			"controllerManager.manager.args[2]=--health-probe-bind-address=:8081",
+			helmSetArg,
+			"controllerManager.manager.args[3]=--configuration-name=jira-jit-rbac-operator-default",
 		)
 		_, err = utils.Run(cmd)
 		Expect(err).NotTo(HaveOccurred(), "Failed to deploy the controller-manager")
@@ -98,13 +133,13 @@ var _ = Describe("Manager", Ordered, func() {
 		cmd := exec.Command("kubectl", "delete", "pod", "curl-metrics", "-n", namespace)
 		_, _ = utils.Run(cmd)
 
-		By("undeploying the controller-manager")
-		cmd = exec.Command("helm", "delete", "-n", namespace, releaseName)
-		_, _ = utils.Run(cmd)
+		// By("undeploying the controller-manager")
+		// cmd = exec.Command("helm", "delete", "-n", namespace, releaseName)
+		// _, _ = utils.Run(cmd)
 
-		By("removing manager namespace")
-		cmd = exec.Command("kubectl", "delete", "ns", namespace)
-		_, _ = utils.Run(cmd)
+		// By("removing manager namespace")
+		// cmd = exec.Command("kubectl", "delete", "ns", namespace)
+		// _, _ = utils.Run(cmd)
 	})
 
 	// After each test, check for failures and collect logs, events,
@@ -257,40 +292,71 @@ var _ = Describe("Manager", Ordered, func() {
 			))
 		})
 
-		It("should provisioned cert-manager", func() {
-			By("validating that cert-manager has the certificate Secret")
-			verifyCertManager := func(g Gomega) {
-				cmd := exec.Command("kubectl", "get", "secrets", "webhook-server-cert", "-n", namespace)
+		// Run common controller test cases
+		utils.JitRequestTests(namespace)
+
+		// Webhook tests
+		Context("When installing the operator with webhooks enabled", func() {
+			It("should successfully run with webhooks working", func() {
+
+				By("undeploying the controller-manager")
+				cmd := exec.Command("helm", "delete", "-n", namespace, releaseName)
+				_, _ = utils.Run(cmd)
+
+				By("deploying the controller-manager with Helm and webhooks enabled")
+				helmArgImg := fmt.Sprintf("controllerManager.manager.image.repository=%s", projectImageRepo)
+				helmArgImgTag := fmt.Sprintf("controllerManager.manager.image.tag=%s", projectImageTag)
+				// Get jiraStubsUrl and replace host for local Kind to connect on localhost
+				parsedURL, _ := url.Parse(ts.URL)
+				hostParts := strings.Split(parsedURL.Host, ":")
+				parsedURL.Host = fmt.Sprintf("host.docker.internal:%s", hostParts[1])
+				jiraBaseUrl := parsedURL.String()
+				helmArgJiraUrl := fmt.Sprintf("controllerManager.manager.env.jiraBaseUrl=%s", jiraBaseUrl)
+				helmSetArg := "--set"
+				cmd = exec.Command(
+					"helm",
+					"install",
+					"-n",
+					namespace,
+					releaseName,
+					chartPath,
+					helmSetArg,
+					helmArgImg,
+					helmSetArg,
+					helmArgImgTag,
+					helmSetArg,
+					helmArgJiraUrl,
+				)
 				_, err := utils.Run(cmd)
-				g.Expect(err).NotTo(HaveOccurred())
-			}
-			Eventually(verifyCertManager).Should(Succeed())
+				Expect(err).NotTo(HaveOccurred(), "Failed to deploy the controller-manager")
+			})
+
+			It("should provisioned cert-manager", func() {
+				By("validating that cert-manager has the certificate Secret")
+				verifyCertManager := func(g Gomega) {
+					cmd := exec.Command("kubectl", "get", "secrets", "webhook-server-cert", "-n", namespace)
+					_, err := utils.Run(cmd)
+					g.Expect(err).NotTo(HaveOccurred())
+				}
+				Eventually(verifyCertManager).Should(Succeed())
+			})
+
+			It("should have CA injection for validating webhooks", func() {
+				By("checking CA injection for validating webhooks")
+				verifyCAInjection := func(g Gomega) {
+					cmd := exec.Command("kubectl", "get",
+						"validatingwebhookconfigurations.admissionregistration.k8s.io",
+						"v1-jira-jit-rbac-operator-validating-webhook-configuration",
+						"-o", "go-template={{ range .webhooks }}{{ .clientConfig.caBundle }}{{ end }}")
+					vwhOutput, err := utils.Run(cmd)
+					g.Expect(err).NotTo(HaveOccurred())
+					g.Expect(len(vwhOutput)).To(BeNumerically(">", 10))
+				}
+				Eventually(verifyCAInjection).Should(Succeed())
+			})
+
 		})
 
-		It("should have CA injection for validating webhooks", func() {
-			By("checking CA injection for validating webhooks")
-			verifyCAInjection := func(g Gomega) {
-				cmd := exec.Command("kubectl", "get",
-					"validatingwebhookconfigurations.admissionregistration.k8s.io",
-					"v1-jira-jit-rbac-operator-validating-webhook-configuration",
-					"-o", "go-template={{ range .webhooks }}{{ .clientConfig.caBundle }}{{ end }}")
-				vwhOutput, err := utils.Run(cmd)
-				g.Expect(err).NotTo(HaveOccurred())
-				g.Expect(len(vwhOutput)).To(BeNumerically(">", 10))
-			}
-			Eventually(verifyCAInjection).Should(Succeed())
-		})
-
-		// +kubebuilder:scaffold:e2e-webhooks-checks
-
-		// TODO: Customize the e2e test suite with scenarios specific to your project.
-		// Consider applying sample/CR(s) and check their status and/or verifying
-		// the reconciliation by using the metrics, i.e.:
-		// metricsOutput := getMetricsOutput()
-		// Expect(metricsOutput).To(ContainSubstring(
-		//    fmt.Sprintf(`controller_runtime_reconcile_total{controller="%s",result="success"} 1`,
-		//    strings.ToLower(<Kind>),
-		// ))
 	})
 })
 

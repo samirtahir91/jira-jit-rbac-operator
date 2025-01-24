@@ -28,19 +28,13 @@ import (
 )
 
 var (
-	TestNamespace                 = os.Getenv("OPERATOR_NAMESPACE")
-	TestJiraWorkflowApproveStatus string
+	TestNamespace = os.Getenv("OPERATOR_NAMESPACE")
 )
 
 const (
-	JitRequestName             = "e2e-jit-test"
-	RoleBindingName            = JitRequestName + "-jit"
-	TestJitConfig              = "jira-jit-rbac-operator-int"
-	ValidClusterRole           = "edit"
-	InvalidClusterRole         = "admin"
-	InvalidNamespace           = "invalid-namespace"
-	TestJiraWorkflowToDoStatus = "ToDo"
-	TestJiraWorkflowApproved   = "Approved"
+	JitRequestName  = "e2e-jit-test"
+	RoleBindingName = JitRequestName + "-jit"
+	TestJitConfig   = "jira-jit-rbac-operator-default"
 )
 
 // Function to initialise os vars
@@ -53,7 +47,6 @@ func init() {
 var _ = Describe("JitRequest Controller", Ordered, func() {
 
 	BeforeAll(func() {
-
 		By("removing manager config")
 		cmd := exec.Command("kubectl", "delete", "jitcfg", TestJitConfig)
 		_, _ = utils.Run(cmd)
@@ -85,159 +78,6 @@ var _ = Describe("JitRequest Controller", Ordered, func() {
 		_, _ = utils.Run(cmd)
 	})
 
-	Context("When creating the JustInTime config object", func() {
-		It("should successfully load the config and write the config file", func() {
-			By("Creating the operator JustInTimeConfig")
-			err := utils.CreateJitConfig(ctx, k8sClient, ValidClusterRole, TestNamespace)
-			Expect(err).NotTo(HaveOccurred())
-		})
-	})
-
-	Context("When creating a new valid JitRequest with a start time 10s from now", func() {
-		It("should successfully process as a new request and issue a rolebinding", func() {
-			By("Creating and approving the JitRequest")
-			TestJiraWorkflowApproveStatus = TestJiraWorkflowApproved
-			jitRequest, err := utils.CreateJitRequest(ctx, k8sClient, 10, ValidClusterRole, TestNamespace)
-			Expect(err).NotTo(HaveOccurred())
-
-			By("Checking the status of the JitRequest for Pre-Approval")
-			err = utils.CheckJitStatus(ctx, k8sClient, jitRequest, StatusPreApproved)
-			Expect(err).NotTo(HaveOccurred())
-
-			By("Waiting for the JitRequest Pre-Approval event to be recorded")
-			err = utils.CheckEvent(
-				ctx,
-				k8sClient,
-				JitRequestName,
-				TestNamespace,
-				"Normal",
-				StatusPreApproved,
-				"ClusterRole 'edit' is allowed\nJira: IAM-1",
-			)
-			Expect(err).NotTo(HaveOccurred())
-
-			By("Checking the status of the JitRequest for completed status")
-			err = utils.CheckJitStatus(ctx, k8sClient, jitRequest, StatusSucceeded)
-			Expect(err).NotTo(HaveOccurred())
-
-			By("Checking the RoleBinding exists")
-			err = utils.CheckRoleBindingExists(ctx, k8sClient, TestNamespace, RoleBindingName)
-			Expect(err).NotTo(HaveOccurred())
-		})
-
-		It("should successfully remove the JitRequest on expiry and remove the RoleBinding", func() {
-			By("Checking the RoleBinding is eventually removed")
-			err := utils.CheckRoleBindingRemoved(ctx, k8sClient, TestNamespace, RoleBindingName)
-			Expect(err).NotTo(HaveOccurred())
-
-			By("Checking the JitRequest is eventually removed")
-			err = utils.CheckJitRemoved(ctx, k8sClient, JitRequestName)
-			Expect(err).NotTo(HaveOccurred())
-		})
-	})
-
-	Context("When creating a new JitRequest with invalid start time from now", func() {
-		It("should successfully process as a new request and reject the JitRequest", func() {
-			By("Creating the JitRequest")
-			TestJiraWorkflowApproveStatus = TestJiraWorkflowToDoStatus
-			_, err := utils.CreateJitRequest(ctx, k8sClient, -10, ValidClusterRole, TestNamespace)
-			Expect(err).NotTo(HaveOccurred())
-
-			By("Waiting for the JitRequest Rejected event to be recorded")
-			err = utils.CheckEvent(
-				ctx,
-				k8sClient,
-				JitRequestName,
-				TestNamespace,
-				"Warning",
-				EventValidationFailed,
-				"must be after current time",
-			)
-			Expect(err).NotTo(HaveOccurred())
-
-			By("Checking the JitRequest is eventually removed")
-			err = utils.CheckJitRemoved(ctx, k8sClient, JitRequestName)
-			Expect(err).NotTo(HaveOccurred())
-		})
-	})
-
-	Context("When creating a new JitRequest with invalid cluster role", func() {
-		It("should successfully process as a new request and reject the JitRequest", func() {
-			By("Creating the JitRequest")
-			TestJiraWorkflowApproveStatus = TestJiraWorkflowToDoStatus
-			_, err := utils.CreateJitRequest(ctx, k8sClient, 10, InvalidClusterRole, TestNamespace)
-			Expect(err).NotTo(HaveOccurred())
-
-			By("Waiting for the JitRequest Rejected event to be recorded")
-			err = utils.CheckEvent(
-				ctx,
-				k8sClient,
-				JitRequestName,
-				TestNamespace,
-				"Warning",
-				EventValidationFailed,
-				fmt.Sprintf("ClusterRole '%s' is not allowed", InvalidClusterRole),
-			)
-			Expect(err).NotTo(HaveOccurred())
-
-			By("Checking the JitRequest is eventually removed")
-			err = utils.CheckJitRemoved(ctx, k8sClient, JitRequestName)
-			Expect(err).NotTo(HaveOccurred())
-		})
-	})
-
-	Context("When creating a new valid JitRequest with a start time 10s from now and not approving in Jira", func() {
-		It("should successfully process as a new request and reject the Jira and JitRequest", func() {
-			By("Creating and not approving the JitRequest")
-			TestJiraWorkflowApproveStatus = TestJiraWorkflowToDoStatus
-			jitRequest, err := utils.CreateJitRequest(ctx, k8sClient, 10, ValidClusterRole, TestNamespace)
-			Expect(err).NotTo(HaveOccurred())
-
-			By("Checking the status of the JitRequest for Pre-Approval")
-			err = utils.CheckJitStatus(ctx, k8sClient, jitRequest, StatusPreApproved)
-			Expect(err).NotTo(HaveOccurred())
-
-			By("Waiting for the JitRequest Rejected event to be recorded")
-			err = utils.CheckEvent(
-				ctx,
-				k8sClient,
-				JitRequestName,
-				TestNamespace,
-				"Warning",
-				"JiraNotApproved",
-				"Error: failed on jira approval",
-			)
-			Expect(err).NotTo(HaveOccurred())
-
-			By("Checking the JitRequest is eventually removed")
-			err = utils.CheckJitRemoved(ctx, k8sClient, JitRequestName)
-			Expect(err).NotTo(HaveOccurred())
-		})
-	})
-
-	Context("When creating a new JitRequest with a start time 10s from now and for a Namespace with non-matching label", func() {
-		It("should successfully process as a new request and reject the Jira and JitRequest", func() {
-			By("Creating and approving the JitRequest with a label match")
-			TestJiraWorkflowApproveStatus = TestJiraWorkflowApproved
-			namespaceLabel := "bar"
-			_, err := utils.CreateJitRequest(ctx, k8sClient, 10, ValidClusterRole, TestNamespace, namespaceLabel)
-			Expect(err).NotTo(HaveOccurred())
-
-			By("Waiting for the JitRequest Rejected event to be recorded")
-			err = utils.CheckEvent(
-				ctx,
-				k8sClient,
-				JitRequestName,
-				TestNamespace,
-				"Warning",
-				EventValidationFailed,
-				fmt.Sprintf("Namespace(s) %s not validated | Error: the following namespaces do not match the specified labels (foo=%s): [%s]", TestNamespace, namespaceLabel, TestNamespace),
-			)
-			Expect(err).NotTo(HaveOccurred())
-
-			By("Checking the JitRequest is eventually removed")
-			err = utils.CheckJitRemoved(ctx, k8sClient, JitRequestName)
-			Expect(err).NotTo(HaveOccurred())
-		})
-	})
+	// Run common controller test cases
+	utils.JitRequestTests(TestNamespace)
 })

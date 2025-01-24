@@ -191,7 +191,11 @@ helm upgrade --install -n jira-jit-rbac-operator-system <release_name> . --creat
 
 # To install without webhooks use these flags
   --set webhook.enabled=false \
-  --set controllerManager.manager.env.enableWebhooks="false"
+  --set controllerManager.manager.env.enableWebhooks=false \
+  --set controllerManager.manager.args[0]=--metrics-bind-address=:8443 \
+  --set controllerManager.manager.args[1]=--leader-elect \
+  --set controllerManager.manager.args[2]=--health-probe-bind-address=:8081 \
+  --set controllerManager.manager.args[3]=--configuration-name=jira-jit-rbac-operator-default
 ```
 - You can use the latest public image on DockerHub - `samirtahir91076/jira-jit-rbac-operator:latest`
   - See [tags](https://hub.docker.com/r/samirtahir91076/jira-jit-rbac-operator/tags) 
@@ -224,12 +228,26 @@ kubectl apply -k config/samples/
 ```
 
 ### Integration Testing
-- Tests should be run against a real cluster, i.e. Kind or Minikube
+- Tests will be run against a real cluster, i.e. Kind or Minikube
 ```sh
 export OPERATOR_NAMESPACE=jira-jit-int-test
 USE_EXISTING_CLUSTER=true make test
+```
 
+### Webhook Testing
+- Tests will be not run against a real cluster
+```sh
+export OPERATOR_NAMESPACE=jira-jit-int-test
 USE_EXISTING_CLUSTER=false make test-webhooks
+```
+
+### E2E Testing
+- Tests will be run against a Kind cluster
+```sh
+# If on MAC
+export TEST_OS="mac"  # MAC OS only
+
+make test-e2e
 ```
 
 **Run the controller in the foreground for testing:**

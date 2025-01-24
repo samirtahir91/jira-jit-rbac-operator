@@ -37,7 +37,7 @@ var (
 
 const (
 	JitRequestName     = "e2e-jit-test"
-	TestJitConfig      = "jira-jit-rbac-operator-int"
+	TestJitConfig      = "jira-jit-rbac-operator-default"
 	ValidClusterRole   = "edit"
 	InvalidClusterRole = "admin"
 	InvalidNamespace   = "invalid-namespace"

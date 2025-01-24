@@ -17,15 +17,23 @@ limitations under the License.
 package e2e
 
 import (
+	"context"
 	"fmt"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"testing"
 
+	"k8s.io/client-go/kubernetes/scheme"
+	config "sigs.k8s.io/controller-runtime/pkg/client/config"
+
+	justintimev1 "jira-jit-rbac-operator/api/v1"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"jira-jit-rbac-operator/test/utils"
+	utils "jira-jit-rbac-operator/test/utils"
 )
 
 var (
@@ -46,6 +54,10 @@ var (
 	projectImageRepo = "example.com/jira-jit-rbac-operator"
 	projectImageTag  = "v1.0.0"
 	projectImage     = fmt.Sprintf("%s:%s", projectImageRepo, projectImageTag)
+
+	ts        *httptest.Server
+	ctx       context.Context
+	k8sClient client.Client
 )
 
 // TestE2E runs the end-to-end (e2e) test suite for the project. These tests execute in an isolated,
@@ -59,18 +71,43 @@ func TestE2E(t *testing.T) {
 }
 
 var _ = BeforeSuite(func() {
+
+	By("setting K8s client and context for suite")
+	cfg, err := config.GetConfig()
+	if err != nil {
+		fmt.Printf("Failed to load kubeconfig: %v\n", err)
+		return
+	}
+	k8sClient, err = client.New(cfg, client.Options{})
+	Expect(err).NotTo(HaveOccurred())
+	Expect(k8sClient).NotTo(BeNil())
+	ctx = context.Background()
+	Expect(ctx).NotTo(BeNil())
+
+	err = justintimev1.AddToScheme(scheme.Scheme)
+	Expect(err).NotTo(HaveOccurred())
+
+	// Start the stub server
+	By("Starting the jira http stub server")
+	ts = utils.CreateHTTPServer()
+	fmt.Print(ts.URL)
+
 	By("Ensure that Prometheus is enabled")
 	_ = utils.UncommentCode("config/default/kustomization.yaml", "#- ../prometheus", "#")
 
 	By("generating files")
 	cmd := exec.Command("make", "generate")
-	_, err := utils.Run(cmd)
+	_, err = utils.Run(cmd)
 	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to run make generate")
 
 	By("generating manifests")
 	cmd = exec.Command("make", "manifests")
 	_, err = utils.Run(cmd)
 	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to run make manifests")
+
+	By("loading the cert-manager image on Kind")
+	utils.GetAndLoadCertMgrImg()
+	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to load cert-manager images into Kind")
 
 	By("building the manager(Operator) image")
 	cmd = exec.Command("make", "docker-build", fmt.Sprintf("IMG=%s", projectImage))
@@ -119,4 +156,7 @@ var _ = AfterSuite(func() {
 		_, _ = fmt.Fprintf(GinkgoWriter, "Uninstalling CertManager...\n")
 		utils.UninstallCertManager()
 	}
+
+	// stop stubs server
+	ts.Close()
 })

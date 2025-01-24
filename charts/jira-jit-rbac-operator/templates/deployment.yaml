@@ -70,9 +70,11 @@ spec:
         volumeMounts:
         - mountPath: /var/run/jit-rbac-configuration
           name: jit-rbac-config
+        {{- if .Values.webhook.enabled }}
         - mountPath: /tmp/k8s-webhook-server/serving-certs
           name: webhook-certs
           readOnly: true
+        {{- end }}
       securityContext: {{- toYaml .Values.controllerManager.podSecurityContext | nindent
         8 }}
       serviceAccountName: {{ include "jira-jit-rbac-operator.fullname" . }}-controller-manager
@@ -80,6 +82,8 @@ spec:
       volumes:
       - emptyDir: {}
         name: jit-rbac-config
+      {{- if .Values.webhook.enabled }}
       - name: webhook-certs
         secret:
           secretName: webhook-server-cert
+      {{- end }}
