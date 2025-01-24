@@ -34,13 +34,17 @@ import (
 const namespace = "jira-jit-rbac-operator-system"
 
 // serviceAccountName created for the project
-const serviceAccountName = "jira-jit-rbac-operator-controller-manager"
+const serviceAccountName = "v1-jira-jit-rbac-operator-controller-manager"
 
 // metricsServiceName is the name of the metrics service of the project
-const metricsServiceName = "jira-jit-rbac-operator-controller-manager-metrics-service"
+const metricsServiceName = "v1-jira-jit-rbac-operator-controller-manager-metrics-service"
 
 // metricsRoleBindingName is the name of the RBAC that will be created to allow get the metrics data
-const metricsRoleBindingName = "jira-jit-rbac-operator-metrics-binding"
+const metricsRoleBindingName = "v1-jira-jit-rbac-operator-metrics-binding"
+
+// releaseName of chart
+const releaseName = "v1"
+const chartPath = "./charts/jira-jit-rbac-operator"
 
 var _ = Describe("Manager", Ordered, func() {
 	var controllerPodName string
@@ -53,13 +57,36 @@ var _ = Describe("Manager", Ordered, func() {
 		_, err := utils.Run(cmd)
 		Expect(err).NotTo(HaveOccurred(), "Failed to create namespace")
 
-		By("installing CRDs")
-		cmd = exec.Command("make", "install")
+		By("creating manager jira secret")
+		cmd = exec.Command(
+			"kubectl",
+			"create",
+			"-n",
+			namespace,
+			"secret",
+			"generic",
+			"jira-credentials",
+			"--from-literal=api-token=dummy",
+		)
 		_, err = utils.Run(cmd)
-		Expect(err).NotTo(HaveOccurred(), "Failed to install CRDs")
+		Expect(err).NotTo(HaveOccurred(), "Failed to create namespace")
 
-		By("deploying the controller-manager")
-		cmd = exec.Command("make", "deploy", fmt.Sprintf("IMG=%s", projectImage))
+		By("deploying the controller-manager with Helm")
+		helmArgImg := fmt.Sprintf("controllerManager.manager.image.repository=%s", projectImageRepo)
+		helmArgImgTag := fmt.Sprintf("controllerManager.manager.image.tag=%s", projectImageTag)
+		helmSetArg := "--set"
+		cmd = exec.Command(
+			"helm",
+			"install",
+			"-n",
+			namespace,
+			releaseName,
+			chartPath,
+			helmSetArg,
+			helmArgImg,
+			helmSetArg,
+			helmArgImgTag,
+		)
 		_, err = utils.Run(cmd)
 		Expect(err).NotTo(HaveOccurred(), "Failed to deploy the controller-manager")
 	})
@@ -72,11 +99,7 @@ var _ = Describe("Manager", Ordered, func() {
 		_, _ = utils.Run(cmd)
 
 		By("undeploying the controller-manager")
-		cmd = exec.Command("make", "undeploy")
-		_, _ = utils.Run(cmd)
-
-		By("uninstalling CRDs")
-		cmd = exec.Command("make", "uninstall")
+		cmd = exec.Command("helm", "delete", "-n", namespace, releaseName)
 		_, _ = utils.Run(cmd)
 
 		By("removing manager namespace")
@@ -166,7 +189,7 @@ var _ = Describe("Manager", Ordered, func() {
 		It("should ensure the metrics endpoint is serving metrics", func() {
 			By("creating a ClusterRoleBinding for the service account to allow access to metrics")
 			cmd := exec.Command("kubectl", "create", "clusterrolebinding", metricsRoleBindingName,
-				"--clusterrole=jira-jit-rbac-operator-metrics-reader",
+				"--clusterrole=v1-jira-jit-rbac-operator-metrics-reader",
 				fmt.Sprintf("--serviceaccount=%s:%s", namespace, serviceAccountName),
 			)
 			_, err := utils.Run(cmd)
@@ -201,7 +224,7 @@ var _ = Describe("Manager", Ordered, func() {
 				cmd := exec.Command("kubectl", "logs", controllerPodName, "-n", namespace)
 				output, err := utils.Run(cmd)
 				g.Expect(err).NotTo(HaveOccurred())
-				g.Expect(output).To(ContainSubstring("controller-runtime.metrics\tServing metrics server"),
+				g.Expect(output).To(ContainSubstring("Serving metrics server"),
 					"Metrics server not yet started")
 			}
 			Eventually(verifyMetricsServerStarted).Should(Succeed())
@@ -249,7 +272,7 @@ var _ = Describe("Manager", Ordered, func() {
 			verifyCAInjection := func(g Gomega) {
 				cmd := exec.Command("kubectl", "get",
 					"validatingwebhookconfigurations.admissionregistration.k8s.io",
-					"jira-jit-rbac-operator-validating-webhook-configuration",
+					"v1-jira-jit-rbac-operator-validating-webhook-configuration",
 					"-o", "go-template={{ range .webhooks }}{{ .clientConfig.caBundle }}{{ end }}")
 				vwhOutput, err := utils.Run(cmd)
 				g.Expect(err).NotTo(HaveOccurred())
