@@ -3,8 +3,10 @@ kind: CustomResourceDefinition
 metadata:
   name: justintimeconfigs.justintime.samir.io
   annotations:
+    {{- if .Values.webhook.enabled }}
     cert-manager.io/inject-ca-from: '{{ .Release.Namespace }}/{{ include "jira-jit-rbac-operator.fullname"
       . }}-serving-cert'
+    {{- end }}
     controller-gen.kubebuilder.io/version: v0.16.4
   labels:
   {{- include "jira-jit-rbac-operator.labels" . | nindent 4 }}

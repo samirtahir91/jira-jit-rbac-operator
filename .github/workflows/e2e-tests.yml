@@ -8,6 +8,8 @@ jobs:
   test-e2e:
     name: Run on Ubuntu
     runs-on: ubuntu-latest
+    # Pull requests from the same repository won't trigger this checks as they were already triggered by the push
+    if: (github.event_name == 'push' || github.event.pull_request.head.repo.full_name != github.repository)
     steps:
       - name: Clone the code
         uses: actions/checkout@v4
@@ -25,6 +27,11 @@ jobs:
 
       - name: Verify kind installation
         run: kind version
+
+      - name: Get docker bridge ip
+        run: |
+          ip addr show docker0
+          export DOCKER_BRIDGE_IP=$(ip -4 addr show docker0 | grep -oP '(?<=inet\s)\d+(\.\d+){3}')
 
       - name: Running Test e2e
         run: |

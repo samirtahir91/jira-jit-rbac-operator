@@ -44,12 +44,36 @@ const (
 	prometheusOperatorURL     = "https://github.com/prometheus-operator/prometheus-operator/" +
 		"releases/download/%s/bundle.yaml"
 
-	certmanagerVersion = "v1.16.0"
-	certmanagerURLTmpl = "https://github.com/jetstack/cert-manager/releases/download/%s/cert-manager.yaml"
+	certmanagerVersion  = "v1.16.0"
+	certmanagerURLTmpl  = "https://github.com/jetstack/cert-manager/releases/download/%s/cert-manager.yaml"
+	certmanagerCaImg    = "quay.io/jetstack/cert-manager-cainjector"
+	certmanagerCtrlImg  = "quay.io/jetstack/cert-manager-controller"
+	certmanagerWhookImg = "quay.io/jetstack/cert-manager-webhook"
 )
 
 func warnError(err error) {
 	_, _ = fmt.Fprintf(GinkgoWriter, "warning: %v\n", err)
+}
+
+func GetAndLoadCertMgrImg() {
+	images := []string{
+		fmt.Sprintf("%s:%s", certmanagerCaImg, certmanagerVersion),
+		fmt.Sprintf("%s:%s", certmanagerCtrlImg, certmanagerVersion),
+		fmt.Sprintf("%s:%s", certmanagerWhookImg, certmanagerVersion),
+		"curlimages/curl:7.78.0",
+	}
+
+	for _, img := range images {
+		cmd := exec.Command("docker", "pull", img)
+		if _, err := Run(cmd); err != nil {
+			warnError(err)
+		}
+
+		err := LoadImageToKindClusterWithName(img)
+		if err != nil {
+			warnError(err)
+		}
+	}
 }
 
 // Function to create a namespace
@@ -234,7 +258,7 @@ func CreateJitConfig(ctx context.Context, k8sClient client.Client, clusterRole, 
 
 	jitCfg := &justintimev1.JustInTimeConfig{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "jira-jit-rbac-operator-int",
+			Name: "jira-jit-rbac-operator-default",
 		},
 		Spec: justintimev1.JustInTimeConfigSpec{
 			AllowedClusterRoles: []string{
