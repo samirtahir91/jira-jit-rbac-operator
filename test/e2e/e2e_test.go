@@ -83,11 +83,8 @@ var _ = Describe("Manager", Ordered, func() {
 		helmArgImgTag := fmt.Sprintf("controllerManager.manager.image.tag=%s", projectImageTag)
 		var jiraBaseUrl string
 		if os.Getenv("TEST_OS") == "mac" {
-			// Get jiraStubsUrl and replace host for local Kind to connect on localhost on MAC OS
-			parsedURL, _ := url.Parse(ts.URL)
-			hostParts := strings.Split(parsedURL.Host, ":")
-			parsedURL.Host = fmt.Sprintf("host.docker.internal:%s", hostParts[1])
-			jiraBaseUrl = parsedURL.String()
+			// MAC OS
+			jiraBaseUrl = "http://host.docker.internal:8082"
 		} else {
 			// Linux - use docker bridge service
 			jiraBaseUrl = "http://dockerhost:8082"
