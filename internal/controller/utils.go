@@ -16,9 +16,9 @@ import (
 	"time"
 
 	"k8s.io/apimachinery/pkg/types"
+	retry "k8s.io/client-go/util/retry"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
@@ -36,32 +36,21 @@ func (r *JitRequestReconciler) updateStatus(
 	status,
 	message,
 	jiraTicket string,
-	maxAttempts int,
 ) error {
-	attempts := 0
 	jitRequest.Status.State = status
 	jitRequest.Status.Message = message
 	jitRequest.Status.JiraTicket = jiraTicket
 	jitRequest.Status.StartTime = jitRequest.Spec.StartTime
 	jitRequest.Status.EndTime = jitRequest.Spec.EndTime
-	for {
-		attempts++
-		err := r.Status().Update(ctx, jitRequest)
-		if err == nil {
-			return nil // Update successful
-		}
-		if apierrors.IsConflict(err) {
-			// Conflict error, retry the update
-			if attempts >= maxAttempts {
-				return fmt.Errorf("maximum retry attempts reached, failed to update JitRequest status")
-			}
-			// Incremental sleep between attempts
-			time.Sleep(time.Duration(attempts*2) * time.Second)
-			continue
-		}
-		// Other error, return with the error
+
+	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		return r.Status().Update(ctx, jitRequest)
+	})
+	if err != nil {
 		return fmt.Errorf("failed to update JitRequest status: %v", err)
 	}
+
+	return nil
 }
 
 // Delete a JitRequest
@@ -97,7 +86,7 @@ func (r *JitRequestReconciler) rejectInvalidNamespace(
 ) (ctrl.Result, error) {
 	errorMsg := fmt.Sprintf("Namespace(s) %s not validated | Error: %s", namespace, err)
 	r.raiseEvent(jitRequest, "Warning", EventValidationFailed, errorMsg)
-	if err := r.updateStatus(ctx, jitRequest, StatusRejected, errorMsg, jiraIssueKey, 3); err != nil {
+	if err := r.updateStatus(ctx, jitRequest, StatusRejected, errorMsg, jiraIssueKey); err != nil {
 		l.Error(err, "failed to update status to Rejected")
 		return ctrl.Result{}, err
 	}
@@ -113,7 +102,7 @@ func (r *JitRequestReconciler) rejectInvalidRole(
 ) (ctrl.Result, error) {
 	errorMsg := fmt.Sprintf("ClusterRole '%s' is not allowed", jitRequest.Spec.ClusterRole)
 	r.raiseEvent(jitRequest, "Warning", EventValidationFailed, errorMsg)
-	if err := r.updateStatus(ctx, jitRequest, StatusRejected, errorMsg, jiraIssueKey, 3); err != nil {
+	if err := r.updateStatus(ctx, jitRequest, StatusRejected, errorMsg, jiraIssueKey); err != nil {
 		l.Error(err, "failed to update status to Rejected")
 		return ctrl.Result{}, err
 	}
@@ -188,7 +177,7 @@ func (r *JitRequestReconciler) createRoleBinding(ctx context.Context, jitRequest
 		}
 
 		// Set owner references
-		if err := controllerutil.SetControllerReference(jitRequest, roleBinding, r.Scheme); err != nil {
+		if err := ctrl.SetControllerReference(jitRequest, roleBinding, r.Scheme); err != nil {
 			return fmt.Errorf("failed to set owner reference for RoleBinding: %v", err)
 		}
 
@@ -243,7 +232,7 @@ func (r *JitRequestReconciler) preApproveRequest(
 		}
 
 		// update jitRequest status
-		if err := r.updateStatus(ctx, jitRequest, StatusPreApproved, jitRequestStatusMsg, jiraIssueKey, 5); err != nil {
+		if err := r.updateStatus(ctx, jitRequest, StatusPreApproved, jitRequestStatusMsg, jiraIssueKey); err != nil {
 			l.Error(err, "failed to update status to Pre-Approved")
 			return ctrl.Result{}, err
 		}
@@ -262,7 +251,7 @@ func (r *JitRequestReconciler) preApproveRequest(
 	r.raiseEvent(jitRequest, "Warning", EventValidationFailed, errMsg.Error())
 
 	// update jitRequest status
-	if err := r.updateStatus(ctx, jitRequest, StatusRejected, errMsg.Error(), jiraIssueKey, 3); err != nil {
+	if err := r.updateStatus(ctx, jitRequest, StatusRejected, errMsg.Error(), jiraIssueKey); err != nil {
 		l.Error(err, "failed to update status to Rejected")
 		return ctrl.Result{}, err
 	}

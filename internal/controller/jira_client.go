@@ -180,7 +180,7 @@ func (r *JitRequestReconciler) createJiraTicket(
 		if !exists {
 			// missing field, reject
 			errMsg := fmt.Errorf("missing custom field: %s", fieldName)
-			if err := r.updateStatus(ctx, jitRequest, StatusRejected, errMsg.Error(), Skipped, 3); err != nil {
+			if err := r.updateStatus(ctx, jitRequest, StatusRejected, errMsg.Error(), Skipped); err != nil {
 				l.Error(err, "failed to update status to Rejected")
 				return Skipped, nil
 			}
