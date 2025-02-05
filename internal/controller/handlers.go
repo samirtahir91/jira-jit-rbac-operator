@@ -103,7 +103,7 @@ func (r *JitRequestReconciler) handlePreApproved(
 	if err := r.getJiraApproval(ctx, jitRequest, jiraWorkflowApproveStatus); err != nil {
 		l.Error(err, StatusRejected, "jira ticket", jiraTicket)
 		r.raiseEvent(jitRequest, "Warning", "JiraNotApproved", fmt.Sprintf("Error: %s", err))
-		if err := r.updateStatus(ctx, jitRequest, StatusRejected, "Jira ticket has not been approved", jiraTicket, 3); err != nil {
+		if err := r.updateStatus(ctx, jitRequest, StatusRejected, "Jira ticket has not been approved", jiraTicket); err != nil {
 			return ctrl.Result{}, err
 		}
 		return ctrl.Result{}, nil
@@ -120,7 +120,7 @@ func (r *JitRequestReconciler) handlePreApproved(
 		return ctrl.Result{}, err
 	}
 
-	if err := r.updateStatus(ctx, jitRequest, StatusSucceeded, "Access granted until end time", jiraTicket, 3); err != nil {
+	if err := r.updateStatus(ctx, jitRequest, StatusSucceeded, "Access granted until end time", jiraTicket); err != nil {
 		return ctrl.Result{}, err
 	}
 
