@@ -227,10 +227,21 @@ You can apply the samples (examples) from the config/sample:
 kubectl apply -k config/samples/
 ```
 
+### Unit Testing
+- Tests will be run against a real cluster, i.e. Kind or Minikube
+```sh
+make kind-create # optional to use a kind cluster
+export OPERATOR_NAMESPACE=jira-jit-int-test
+export UNIT_TEST=true
+USE_EXISTING_CLUSTER=true make unit-test
+```
+
 ### Integration Testing
 - Tests will be run against a real cluster, i.e. Kind or Minikube
 ```sh
+make kind-create # optional to use a kind cluster
 export OPERATOR_NAMESPACE=jira-jit-int-test
+export UNIT_TEST=false
 USE_EXISTING_CLUSTER=true make test
 ```
 

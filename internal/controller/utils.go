@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	justintimev1 "jira-jit-rbac-operator/api/v1"
-	"strings"
 
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
@@ -12,11 +11,11 @@ import (
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	retry "k8s.io/client-go/util/retry"
 
 	"time"
 
 	"k8s.io/apimachinery/pkg/types"
-	retry "k8s.io/client-go/util/retry"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -45,6 +44,7 @@ func (r *JitRequestReconciler) updateStatus(
 
 	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		return r.Status().Update(ctx, jitRequest)
+
 	})
 	if err != nil {
 		return fmt.Errorf("failed to update JitRequest status: %v", err)
@@ -190,71 +190,4 @@ func (r *JitRequestReconciler) createRoleBinding(ctx context.Context, jitRequest
 	}
 
 	return nil
-}
-
-// Pre-approve the JitRequest, update the Jira ticke and queue for start time
-func (r *JitRequestReconciler) preApproveRequest(
-	ctx context.Context,
-	l logr.Logger,
-	jitRequest *justintimev1.JitRequest,
-	jiraIssueKey, additionalComments string,
-) (ctrl.Result, error) {
-	startTime := jitRequest.Spec.StartTime.Time
-
-	if startTime.After(time.Now()) {
-
-		// record event
-		r.raiseEvent(jitRequest, "Normal", StatusPreApproved, fmt.Sprintf("ClusterRole '%s' is allowed\nJira: %s", jitRequest.Spec.ClusterRole, jiraIssueKey))
-
-		// msg for status and comment
-		jitRequestStatusMsg := "Pre-approval - Access will be granted at start time pending human approval(s)"
-
-		// build comment
-		jiraMessage := fmt.Sprintf("{color:#00875a}*%s*{color}", jitRequestStatusMsg)
-		namespaces := strings.Join(jitRequest.Spec.Namespaces, "\n")
-		comment := jiraMessage + "\n|*Namespace(s)*|" + namespaces + "|\n|*User*|" + jitRequest.Spec.Reporter + "|"
-
-		// check if additionalUsers defined and add to comment
-		additionalUsers := jitRequest.Spec.AdditionUserEmails
-		if len(additionalUsers) > 0 {
-			additionalUsersStr := strings.Join(additionalUsers, "\n")
-			comment += "\n|*Additional Users*|" + additionalUsersStr + "|"
-		}
-
-		// add additional comments if exists
-		if additionalComments != "" {
-			comment += "\n\n*Additional Info:*\n" + additionalComments
-		}
-
-		// add comment
-		if err := r.updateJiraTicket(ctx, jiraIssueKey, comment); err != nil {
-			return ctrl.Result{}, err
-		}
-
-		// update jitRequest status
-		if err := r.updateStatus(ctx, jitRequest, StatusPreApproved, jitRequestStatusMsg, jiraIssueKey); err != nil {
-			l.Error(err, "failed to update status to Pre-Approved")
-			return ctrl.Result{}, err
-		}
-
-		// requeue for start time
-		delay := time.Until(startTime)
-		l.Info("Start time not reached, requeuing", "requeueAfter", delay)
-		return ctrl.Result{RequeueAfter: delay}, nil
-	}
-
-	// invalid start time, reject
-	errMsg := fmt.Errorf("start time %s must be after current time", jitRequest.Spec.StartTime.Time)
-	l.Error(errMsg, "start time validation failed")
-
-	// record event
-	r.raiseEvent(jitRequest, "Warning", EventValidationFailed, errMsg.Error())
-
-	// update jitRequest status
-	if err := r.updateStatus(ctx, jitRequest, StatusRejected, errMsg.Error(), jiraIssueKey); err != nil {
-		l.Error(err, "failed to update status to Rejected")
-		return ctrl.Result{}, err
-	}
-
-	return ctrl.Result{}, nil
 }

@@ -59,9 +59,30 @@ fmt: ## Run go fmt against code.
 vet: ## Run go vet against code.
 	go vet ./...
 
+
+.PHONY: unit-test-utils
+unit-test-utils: manifests generate fmt vet envtest ## Run unit tests.
+	go test $$(go list ./... | grep pkg) -v -ginkgo.v -coverprofile cover.out
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test $$(go list ./... | grep -E '/internal/controller') -v -ginkgo.v --ginkgo.label-filter="utils" -coverprofile cover.out
+
+.PHONY: unit-test-handlers
+unit-test-handlers: manifests generate fmt vet envtest ## Run unit tests.
+	go test $$(go list ./... | grep pkg) -v -ginkgo.v -coverprofile cover.out
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test $$(go list ./... | grep -E '/internal/controller') -v -ginkgo.v --ginkgo.label-filter="handlers" -coverprofile cover.out
+
+.PHONY: unit-test-jira_client
+unit-test-jira_client: manifests generate fmt vet envtest ## Run unit tests.
+	go test $$(go list ./... | grep pkg) -v -ginkgo.v -coverprofile cover.out
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test $$(go list ./... | grep -E '/internal/controller') -v -ginkgo.v --ginkgo.label-filter="jira_client" -coverprofile cover.out
+
+.PHONY: unit-test
+unit-test: manifests generate fmt vet envtest ## Run unit tests.
+	go test $$(go list ./... | grep pkg) -v -ginkgo.v -coverprofile cover.out
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test $$(go list ./... | grep -E '/internal/controller') -v -ginkgo.v --ginkgo.label-filter="unit" -coverprofile cover.out
+
 .PHONY: test
 test: manifests generate fmt vet envtest ## Run tests.
-	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test $$(go list ./... | grep -v -E '/e2e|/config|/utils|/cmd|/api|/webhook') -v -ginkgo.v -coverprofile cover.out
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test $$(go list ./... | grep -E '/internal/controller') -v -ginkgo.v --ginkgo.label-filter="integration" -coverprofile cover.out
 
 .PHONY: test-webhooks
 test-webhooks: manifests generate fmt vet envtest ## Run tests.

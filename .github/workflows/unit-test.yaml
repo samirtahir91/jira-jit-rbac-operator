@@ -1,4 +1,4 @@
-name: BDD Tests
+name: Unit Tests
 
 # Trigger the workflow on pull requests and direct pushes to any branch
 on:
@@ -39,12 +39,6 @@ jobs:
           
           make kind-create
           
-          export UNIT_TEST=false
+          export UNIT_TEST=true
           export OPERATOR_NAMESPACE=jira-jit-int-test
-          USE_EXISTING_CLUSTER=true make test
-
-      - name: Send the coverage output
-        if: matrix.os != 'macos-latest'
-        uses: shogo82148/actions-goveralls@v1
-        with:
-          path-to-profile: cover.out
+          USE_EXISTING_CLUSTER=true make unit-test
