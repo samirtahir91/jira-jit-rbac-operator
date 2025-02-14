@@ -2,6 +2,7 @@ package controller
 
 import (
 	"errors"
+	"fmt"
 	v1 "jira-jit-rbac-operator/api/v1"
 	"jira-jit-rbac-operator/internal/config"
 	test_utils "jira-jit-rbac-operator/test/utils"
@@ -9,7 +10,9 @@ import (
 	"regexp"
 	"time"
 
+	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/types"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -27,8 +30,9 @@ var _ = Describe("JitRequestReconciler handlers Unit Tests", Ordered, Label("uni
 
 	var reconciler *JitRequestReconciler
 	l := log.FromContext(ctx)
+	var fakeRecorder *record.FakeRecorder
 
-	// test config
+	// test jitConfig
 	allowedClusterRoles := []string{"edit"}
 	jiraProject := "IAM"
 	jiraIssueType := "Access Request"
@@ -49,15 +53,18 @@ var _ = Describe("JitRequestReconciler handlers Unit Tests", Ordered, Label("uni
 	}
 	additionalComments := "This is a test comment."
 
-	BeforeAll(func() {
+	BeforeEach(func() {
 		By("setting a jitRequest reconciler")
+		fakeRecorder = record.NewFakeRecorder(10)
 		reconciler = &JitRequestReconciler{
 			Client:     k8sClient,
-			Recorder:   record.NewFakeRecorder(10),
+			Recorder:   fakeRecorder,
 			Scheme:     scheme.Scheme,
 			JiraClient: jiraClient,
 		}
+	})
 
+	BeforeAll(func() {
 		By("removing manager config")
 		cmd := exec.Command("kubectl", "delete", "jitcfg", TestJitConfig)
 		_, _ = test_utils.Run(cmd)
@@ -97,16 +104,26 @@ var _ = Describe("JitRequestReconciler handlers Unit Tests", Ordered, Label("uni
 
 	Describe("handleNewRequest", func() {
 
-		It("should handle a new JitRequest", func() {
+		It("should handle and pre-approve a new valid JitRequest", func() {
 			// Create JitRequest
 			jitRequest, err := test_utils.CreateJitRequest(ctx, reconciler.Client, 10, test_utils.ValidClusterRole, TestNamespace)
 			Expect(err).NotTo(HaveOccurred())
 
+			By("Checking the jitRequest is re-queued for startTime")
 			result, err := reconciler.handleNewRequest(ctx, l, jitRequest, allowedClusterRoles, jiraProject, jiraIssueType, customFieldsConfig, requiredFieldsConfig, ticketLabels, targetEnvironment, additionalComments)
-
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result).NotTo(BeNil())
 			Expect(result.IsZero()).To(BeFalse())
+
+			By("Checking the jitRequest status is pre-approved")
+			namespacedName := types.NamespacedName{
+				Name: "e2e-jit-test",
+			}
+			err = reconciler.Get(ctx, namespacedName, jitRequest)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(jitRequest.Status.State).To(Equal(StatusPreApproved))
+			Expect(jitRequest.Status.Message).To(Equal("Pre-approval - Access will be granted at start time pending human approval(s)"))
+			Expect(jitRequest.Status.JiraTicket).To(Equal(JiraTicket))
 		})
 
 		It("should return if missing jira field", func() {
@@ -114,14 +131,24 @@ var _ = Describe("JitRequestReconciler handlers Unit Tests", Ordered, Label("uni
 			jitRequest, err := test_utils.CreateJitRequest(ctx, reconciler.Client, 10, test_utils.ValidClusterRole, TestNamespace)
 			Expect(err).NotTo(HaveOccurred())
 
+			By("Checking controller returns with no error")
 			missingCustomFieldsConfig := map[string]v1.CustomFieldSettings{
 				"MissingField": {Type: "user", JiraCustomField: "customfield_10114"},
 			}
 			result, err := reconciler.handleNewRequest(ctx, l, jitRequest, allowedClusterRoles, jiraProject, jiraIssueType, missingCustomFieldsConfig, requiredFieldsConfig, ticketLabels, targetEnvironment, additionalComments)
-
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result).NotTo(BeNil())
 			Expect(result.IsZero()).To(BeTrue())
+
+			By("Checking the jitRequest status is rejected")
+			namespacedName := types.NamespacedName{
+				Name: "e2e-jit-test",
+			}
+			err = reconciler.Get(ctx, namespacedName, jitRequest)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(jitRequest.Status.State).To(Equal(StatusRejected))
+			Expect(jitRequest.Status.Message).To(Equal("missing custom field: MissingField"))
+			Expect(jitRequest.Status.JiraTicket).To(Equal(Skipped))
 		})
 
 		It("should return rejectInvalidRole if invalid cluster role", func() {
@@ -129,11 +156,21 @@ var _ = Describe("JitRequestReconciler handlers Unit Tests", Ordered, Label("uni
 			jitRequest, err := test_utils.CreateJitRequest(ctx, reconciler.Client, 10, test_utils.InvalidClusterRole, TestNamespace)
 			Expect(err).NotTo(HaveOccurred())
 
+			By("Checking controller returns with no error")
 			result, err := reconciler.handleNewRequest(ctx, l, jitRequest, allowedClusterRoles, jiraProject, jiraIssueType, customFieldsConfig, requiredFieldsConfig, ticketLabels, targetEnvironment, additionalComments)
-
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result).NotTo(BeNil())
 			Expect(result.IsZero()).To(BeTrue())
+
+			By("Checking the jitRequest status is rejected")
+			namespacedName := types.NamespacedName{
+				Name: "e2e-jit-test",
+			}
+			err = reconciler.Get(ctx, namespacedName, jitRequest)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(jitRequest.Status.State).To(Equal(StatusRejected))
+			Expect(jitRequest.Status.Message).To(Equal("ClusterRole 'admin' is not allowed"))
+			Expect(jitRequest.Status.JiraTicket).To(Equal(JiraTicket))
 		})
 
 		It("should return rejectInvalidNamespace if invalid namespace labels", func() {
@@ -141,11 +178,22 @@ var _ = Describe("JitRequestReconciler handlers Unit Tests", Ordered, Label("uni
 			jitRequest, err := test_utils.CreateJitRequest(ctx, reconciler.Client, 10, test_utils.ValidClusterRole, TestNamespace, "bar")
 			Expect(err).NotTo(HaveOccurred())
 
+			By("Checking controller returns with no error")
 			result, err := reconciler.handleNewRequest(ctx, l, jitRequest, allowedClusterRoles, jiraProject, jiraIssueType, customFieldsConfig, requiredFieldsConfig, ticketLabels, targetEnvironment, additionalComments)
-
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result).NotTo(BeNil())
 			Expect(result.IsZero()).To(BeTrue())
+
+			By("Checking the jitRequest status is rejected")
+			namespacedName := types.NamespacedName{
+				Name: "e2e-jit-test",
+			}
+			err = reconciler.Get(ctx, namespacedName, jitRequest)
+			message := "Namespace(s) jira-jit-int-test not validated | Error: the following namespaces do not match the specified labels (foo=bar): [jira-jit-int-test]"
+			Expect(err).NotTo(HaveOccurred())
+			Expect(jitRequest.Status.State).To(Equal(StatusRejected))
+			Expect(jitRequest.Status.Message).To(Equal(message))
+			Expect(jitRequest.Status.JiraTicket).To(Equal(JiraTicket))
 		})
 
 		It("should return rejectInvalidNamespace namespace(s) do(es) not match regex defined in config", func() {
@@ -155,24 +203,35 @@ var _ = Describe("JitRequestReconciler handlers Unit Tests", Ordered, Label("uni
 			jitRequest, err := test_utils.CreateJitRequest(ctx, reconciler.Client, 10, test_utils.ValidClusterRole, TestNamespace)
 			Expect(err).NotTo(HaveOccurred())
 
+			By("Checking controller returns with no error")
 			result, err := reconciler.handleNewRequest(ctx, l, jitRequest, allowedClusterRoles, jiraProject, jiraIssueType, customFieldsConfig, requiredFieldsConfig, ticketLabels, targetEnvironment, additionalComments)
-
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result).NotTo(BeNil())
 			Expect(result.IsZero()).To(BeTrue())
+
+			By("Checking the jitRequest status is rejected")
+			namespacedName := types.NamespacedName{
+				Name: "e2e-jit-test",
+			}
+			err = reconciler.Get(ctx, namespacedName, jitRequest)
+			message := "Namespace(s) jira-jit-int-test not validated | Error: spec.namespace: Invalid value: \"jira-jit-int-test\": namespace does not match the allowed pattern: ^valid-.*"
+			Expect(err).NotTo(HaveOccurred())
+			Expect(jitRequest.Status.State).To(Equal(StatusRejected))
+			Expect(jitRequest.Status.Message).To(Equal(message))
+			Expect(jitRequest.Status.JiraTicket).To(Equal(JiraTicket))
 		})
 	})
 
 	Describe("handlePreApproved", func() {
 
-		It("should requeue JitRequest if startTime is not met", func() {
+		It("should re-queue JitRequest if startTime is not met", func() {
 			// Create JitRequest
 			jitRequest, err := test_utils.CreateJitRequest(ctx, reconciler.Client, 100, test_utils.ValidClusterRole, TestNamespace)
 			Expect(err).NotTo(HaveOccurred())
 
+			By("Checking the jitRequest is re-queued for startTime")
 			jitRequest.Status.StartTime.Time = jitRequest.Spec.StartTime.Time
 			result, err := reconciler.handlePreApproved(ctx, l, jitRequest, "", "")
-
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result).NotTo(BeNil())
 			Expect(result.IsZero()).To(BeFalse())
@@ -183,11 +242,22 @@ var _ = Describe("JitRequestReconciler handlers Unit Tests", Ordered, Label("uni
 			jitRequest, err := test_utils.CreateJitRequest(ctx, reconciler.Client, 10, test_utils.ValidClusterRole, TestNamespace)
 			Expect(err).NotTo(HaveOccurred())
 
+			By("Checking controller returns with no error")
 			result, err := reconciler.handlePreApproved(ctx, l, jitRequest, "", "")
-
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result).NotTo(BeNil())
 			Expect(result.IsZero()).To(BeTrue())
+
+			By("Checking the jitRequest status is rejected")
+			namespacedName := types.NamespacedName{
+				Name: "e2e-jit-test",
+			}
+			err = reconciler.Get(ctx, namespacedName, jitRequest)
+			message := "Jira ticket has not been approved"
+			Expect(err).NotTo(HaveOccurred())
+			Expect(jitRequest.Status.State).To(Equal(StatusRejected))
+			Expect(jitRequest.Status.Message).To(Equal(message))
+			Expect(jitRequest.Status.JiraTicket).To(Equal(""))
 		})
 
 		It("should handle a valid pre-approved JitRequest", func() {
@@ -195,16 +265,38 @@ var _ = Describe("JitRequestReconciler handlers Unit Tests", Ordered, Label("uni
 			jitRequest, err := test_utils.CreateJitRequest(ctx, reconciler.Client, 0, test_utils.ValidClusterRole, TestNamespace)
 			Expect(err).NotTo(HaveOccurred())
 
+			By("Approving the JitRequest")
 			jitRequest.Status.StartTime.Time = jitRequest.Spec.StartTime.Time
 			jitRequest.Status.JiraTicket = JiraTicket
 			jiraWorkflowApproved := "Approved"
 			test_utils.IssueStatus = jiraWorkflowApproved
 
+			By("Checking the jitRequest is re-queued for clean-up")
 			result, err := reconciler.handlePreApproved(ctx, l, jitRequest, "10", jiraWorkflowApproved)
-
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result).NotTo(BeNil())
 			Expect(result.IsZero()).To(BeFalse())
+
+			By("Checking the jitRequest status is completed")
+			namespacedName := types.NamespacedName{
+				Name: "e2e-jit-test",
+			}
+			err = reconciler.Get(ctx, namespacedName, jitRequest)
+			message := "Access granted until end time"
+			Expect(err).NotTo(HaveOccurred())
+			Expect(jitRequest.Status.State).To(Equal(StatusSucceeded))
+			Expect(jitRequest.Status.Message).To(Equal(message))
+			Expect(jitRequest.Status.JiraTicket).To(Equal(JiraTicket))
+
+			By("checking role binding exists")
+			rbName := fmt.Sprintf("%s-jit", jitRequest.Name)
+			rb := &rbacv1.RoleBinding{}
+			rbNamespacedName := types.NamespacedName{
+				Namespace: TestNamespace,
+				Name:      rbName,
+			}
+			err = reconciler.Get(ctx, rbNamespacedName, rb)
+			Expect(err).NotTo(HaveOccurred())
 		})
 	})
 
@@ -220,6 +312,7 @@ var _ = Describe("JitRequestReconciler handlers Unit Tests", Ordered, Label("uni
 
 			result, err := reconciler.handleRejected(ctx, l, jitRequest, "1")
 			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("no atlassian resource found"))
 			Expect(result.IsZero()).To(BeTrue())
 		})
 
@@ -228,9 +321,9 @@ var _ = Describe("JitRequestReconciler handlers Unit Tests", Ordered, Label("uni
 			jitRequest, err := test_utils.CreateJitRequest(ctx, reconciler.Client, 10, test_utils.ValidClusterRole, TestNamespace)
 			Expect(err).NotTo(HaveOccurred())
 
+			By("Rejecting the JitRequest")
 			jitRequest.Status.State = "Rejected"
 			jitRequest.Status.JiraTicket = JiraTicket
-
 			result, err := reconciler.handleRejected(ctx, l, jitRequest, "1")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result).NotTo(BeNil())
@@ -250,7 +343,6 @@ var _ = Describe("JitRequestReconciler handlers Unit Tests", Ordered, Label("uni
 			Expect(err).NotTo(HaveOccurred())
 
 			jitRequest.Status.EndTime = metav1.NewTime(metav1.Now().Add(10 * time.Second))
-
 			result, err := reconciler.handleCleaup(ctx, l, jitRequest)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result).NotTo(BeNil())
@@ -262,8 +354,8 @@ var _ = Describe("JitRequestReconciler handlers Unit Tests", Ordered, Label("uni
 			jitRequest, err := test_utils.CreateJitRequest(ctx, reconciler.Client, 10, test_utils.ValidClusterRole, TestNamespace)
 			Expect(err).NotTo(HaveOccurred())
 
+			By("Simulating an expired JitRequest")
 			jitRequest.Status.EndTime = metav1.NewTime(metav1.Now().Add(-1 * time.Second))
-
 			result, err := reconciler.handleCleaup(ctx, l, jitRequest)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result).NotTo(BeNil())
@@ -274,20 +366,21 @@ var _ = Describe("JitRequestReconciler handlers Unit Tests", Ordered, Label("uni
 			Expect(err).NotTo(HaveOccurred())
 		})
 	})
-	Describe("handleCleaup", func() {
+	Describe("handleFetchError", func() {
 		jitRequest := &v1.JitRequest{}
 		notFoundErr := apierrors.NewNotFound(schema.GroupResource{Group: "justintimev1", Resource: "JitRequest"}, "test")
 		otherErr := errors.New("some other error")
 
-		It("should handle NotFound error", func() {
+		It("should ignore NotFound error", func() {
 			result, err := reconciler.handleFetchError(ctx, l, notFoundErr, jitRequest)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(Equal(ctrl.Result{}))
 		})
 
-		It("should handle other errors", func() {
+		It("should return other errors", func() {
 			result, err := reconciler.handleFetchError(ctx, l, otherErr, jitRequest)
 			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(Equal(otherErr.Error()))
 			Expect(result).To(Equal(ctrl.Result{}))
 		})
 	})

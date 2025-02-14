@@ -123,7 +123,7 @@ func (r *JitRequestReconciler) deleteOwnedObjects(ctx context.Context, jitReques
 			for _, ownerRef := range roleBinding.OwnerReferences {
 				if ownerRef.Kind == "JitRequest" && ownerRef.Name == jitRequest.Name {
 					// Delete the RoleBinding if it is owned by the JitRequest
-					if err := r.Delete(ctx, &roleBinding); err != nil {
+					if err := r.Delete(ctx, &roleBinding); err != nil && !apierrors.IsNotFound(err) {
 						return err
 					}
 					break

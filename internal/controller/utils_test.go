@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"fmt"
 	v1 "jira-jit-rbac-operator/api/v1"
 	test_utils "jira-jit-rbac-operator/test/utils"
 	"os/exec"
@@ -8,6 +9,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -18,6 +20,7 @@ import (
 var _ = Describe("JitRequestReconciler utils Unit Tests", Ordered, Label("unit", "utils"), func() {
 
 	var reconciler *JitRequestReconciler
+	var fakeRecorder *record.FakeRecorder
 	var l = log.FromContext(ctx)
 	var globalJitRequest = &v1.JitRequest{
 		ObjectMeta: metav1.ObjectMeta{
@@ -43,15 +46,18 @@ var _ = Describe("JitRequestReconciler utils Unit Tests", Ordered, Label("unit",
 			},
 		},
 	}
-
-	BeforeAll(func() {
+	BeforeEach(func() {
 		By("setting a jitRequest reconciler")
+		fakeRecorder = record.NewFakeRecorder(10)
 		reconciler = &JitRequestReconciler{
 			Client:     k8sClient,
-			Recorder:   record.NewFakeRecorder(10),
+			Recorder:   fakeRecorder,
 			Scheme:     scheme.Scheme,
 			JiraClient: jiraClient,
 		}
+	})
+
+	BeforeAll(func() {
 
 		By("removing manager config")
 		cmd := exec.Command("kubectl", "delete", "jitcfg", TestJitConfig)
@@ -142,6 +148,14 @@ var _ = Describe("JitRequestReconciler utils Unit Tests", Ordered, Label("unit",
 
 			err = reconciler.deleteJitRequest(ctx, jitRequest)
 			Expect(err).NotTo(HaveOccurred())
+
+			By("checking jitRequest is removed")
+			namespacedName := types.NamespacedName{
+				Name: jitRequest.Name,
+			}
+			err = reconciler.Get(ctx, namespacedName, jitRequest)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("not found"))
 		})
 
 		It("should error if failed to delete a JitRequest", func() {
@@ -156,6 +170,12 @@ var _ = Describe("JitRequestReconciler utils Unit Tests", Ordered, Label("unit",
 
 		It("should record an event successfully", func() {
 			reconciler.raiseEvent(globalJitRequest, "Warning", "JiraNotApproved", "raiseEvent test")
+
+			By("Checking the event exists")
+			event := <-fakeRecorder.Events
+			Expect(event).To(ContainSubstring("Warning"))
+			Expect(event).To(ContainSubstring("JiraNotApproved"))
+			Expect(event).To(ContainSubstring("raiseEvent test"))
 		})
 	})
 
@@ -204,6 +224,16 @@ var _ = Describe("JitRequestReconciler utils Unit Tests", Ordered, Label("unit",
 			// Create role binding
 			err := reconciler.createRoleBinding(ctx, globalJitRequest)
 			Expect(err).NotTo(HaveOccurred())
+
+			By("checking role binding exists")
+			rbName := fmt.Sprintf("%s-jit", globalJitRequest.Name)
+			rb := &rbacv1.RoleBinding{}
+			namespacedName := types.NamespacedName{
+				Namespace: TestNamespace,
+				Name:      rbName,
+			}
+			err = reconciler.Get(ctx, namespacedName, rb)
+			Expect(err).NotTo(HaveOccurred())
 		})
 	})
 
@@ -220,6 +250,17 @@ var _ = Describe("JitRequestReconciler utils Unit Tests", Ordered, Label("unit",
 			// deleteOwnedObjects
 			err = reconciler.deleteOwnedObjects(ctx, jitRequest)
 			Expect(err).NotTo(HaveOccurred())
+
+			By("checking role binding is removed")
+			rbName := fmt.Sprintf("%s-jit", jitRequest.Name)
+			rb := &rbacv1.RoleBinding{}
+			namespacedName := types.NamespacedName{
+				Namespace: TestNamespace,
+				Name:      rbName,
+			}
+			err = reconciler.Get(ctx, namespacedName, rb)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("not found"))
 		})
 	})
 })
