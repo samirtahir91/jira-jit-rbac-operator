@@ -44,7 +44,7 @@ func init() {
 	}
 }
 
-var _ = Describe("JitRequest Controller", Ordered, func() {
+var _ = Describe("JitRequest Controller", Ordered, Label("integration"), func() {
 
 	BeforeAll(func() {
 		By("removing manager config")

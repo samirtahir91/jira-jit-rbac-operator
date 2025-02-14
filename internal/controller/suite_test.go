@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"runtime"
 	"testing"
@@ -37,6 +38,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	justintimev1 "jira-jit-rbac-operator/api/v1"
+
+	rbacv1 "k8s.io/api/rbac/v1"
+
 	"jira-jit-rbac-operator/internal/config"
 	utils "jira-jit-rbac-operator/test/utils"
 	// +kubebuilder:scaffold:imports
@@ -51,6 +55,7 @@ var testEnv *envtest.Environment
 var ctx context.Context
 var cancel context.CancelFunc
 var ts *httptest.Server
+var jiraClient *jira.Client
 
 func TestControllers(t *testing.T) {
 	RegisterFailHandler(Fail)
@@ -87,6 +92,9 @@ var _ = BeforeSuite(func() {
 	err = justintimev1.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
 
+	err = rbacv1.AddToScheme(scheme.Scheme)
+	Expect(err).NotTo(HaveOccurred())
+
 	// +kubebuilder:scaffold:scheme
 
 	k8sClient, err = client.New(cfg, client.Options{Scheme: scheme.Scheme})
@@ -104,23 +112,26 @@ var _ = BeforeSuite(func() {
 
 	// Jira client
 	jiraBaseUrl := ts.URL
-	jiraClient, err := jira.New(nil, jiraBaseUrl)
+	fmt.Print("\nJIRA HTTP STUB: ", jiraBaseUrl, "\n")
+	jiraClient, err = jira.New(nil, jiraBaseUrl)
 	Expect(err).ToNot(HaveOccurred())
 	jiraClient.Auth.SetBearerToken("dummy")
 
-	err = (&JitRequestReconciler{
-		JiraClient: jiraClient,
-		Client:     k8sManager.GetClient(),
-		Scheme:     k8sManager.GetScheme(),
-		Recorder:   k8sManager.GetEventRecorderFor("jitrequest-controller"),
-	}).SetupWithManager(k8sManager)
-	Expect(err).ToNot(HaveOccurred())
+	if isUnitTest := os.Getenv("UNIT_TEST"); isUnitTest != "true" {
+		err = (&JitRequestReconciler{
+			JiraClient: jiraClient,
+			Client:     k8sManager.GetClient(),
+			Scheme:     k8sManager.GetScheme(),
+			Recorder:   k8sManager.GetEventRecorderFor("jitrequest-controller"),
+		}).SetupWithManager(k8sManager)
+		Expect(err).ToNot(HaveOccurred())
 
-	err = (&config.JustInTimeConfigReconciler{
-		Client: k8sManager.GetClient(),
-		Scheme: k8sManager.GetScheme(),
-	}).SetupWithManager(k8sManager, TestJitConfig, "/tmp/jit-test")
-	Expect(err).ToNot(HaveOccurred())
+		err = (&config.JustInTimeConfigReconciler{
+			Client: k8sManager.GetClient(),
+			Scheme: k8sManager.GetScheme(),
+		}).SetupWithManager(k8sManager, TestJitConfig, "/tmp/jit-test")
+		Expect(err).ToNot(HaveOccurred())
+	}
 
 	go func() {
 		defer GinkgoRecover()

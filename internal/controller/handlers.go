@@ -56,7 +56,7 @@ func (r *JitRequestReconciler) handleNewRequest(
 		return ctrl.Result{}, err
 	}
 
-	// Return if missing jira field
+	// Return if missing jira field status failed
 	if jiraIssueKey == Skipped {
 		return ctrl.Result{}, nil
 	}
