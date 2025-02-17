@@ -48,6 +48,7 @@ type JustInTimeConfigReconciler struct {
 	Scheme *runtime.Scheme
 }
 
+// Reconcile is the main reconcile loop for a JustInTimeConfig
 func (c *JustInTimeConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	l := log.FromContext(ctx)
 	l.Info("JustInTimeConfig reconciliation started", "request.name", req.Name)
@@ -157,7 +158,7 @@ func (c *JustInTimeConfigReconciler) SaveConfigToFile(ctx context.Context, cfg c
 	return nil
 }
 
-// Only use JustInTimeConfig named as per param
+// nameMatchPredicate returns if JustInTimeConfig is named as per `name`
 func nameMatchPredicate(name string) predicate.Predicate {
 	return predicate.NewPredicateFuncs(func(object client.Object) bool {
 		return object.GetName() == name

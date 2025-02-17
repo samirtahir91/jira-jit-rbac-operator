@@ -5,6 +5,7 @@ import (
 	testUtils "jira-jit-rbac-operator/test/utils"
 	"os/exec"
 
+	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/types"
@@ -16,30 +17,36 @@ import (
 var _ = Describe("JitRequestReconciler jira_client Unit Tests", Ordered, Label("unit", "jira_client"), func() {
 
 	var reconciler *JitRequestReconciler
-	l := log.FromContext(ctx)
 	var fakeRecorder *record.FakeRecorder
-
-	// test config
-	jiraProject := "IAM"
-	jiraIssueType := "Access Request"
-	customFieldsConfig := map[string]v1.CustomFieldSettings{
-		"Approver":      {Type: "user", JiraCustomField: "customfield_10114"},
-		"ProductOwner":  {Type: "user", JiraCustomField: "customfield_10115"},
-		"Justification": {Type: "text", JiraCustomField: "customfield_10116"},
-	}
-	requiredFieldsConfig := &v1.RequiredFieldsSpec{
-		StartTime:   v1.CustomFieldSettings{Type: "date", JiraCustomField: "customfield_10118"},
-		EndTime:     v1.CustomFieldSettings{Type: "date", JiraCustomField: "customfield_10119"},
-		ClusterRole: v1.CustomFieldSettings{Type: "date", JiraCustomField: "customfield_10117"},
-	}
-	ticketLabels := []string{"label1", "label2"}
-	targetEnvironment := &v1.EnvironmentSpec{
-		Environment: "dev-test",
-		Cluster:     "minikube",
-	}
-	additionalComments := "This is a test comment."
+	var l logr.Logger
+	var jitConfig *v1.JustInTimeConfigSpec
 
 	BeforeEach(func() {
+		l = log.FromContext(ctx)
+
+		By("setting a jitConfig")
+		jitConfig = &v1.JustInTimeConfigSpec{
+			AllowedClusterRoles: []string{"edit"},
+			JiraProject:         "IAM",
+			JiraIssueType:       "Access Request",
+			CustomFields: map[string]v1.CustomFieldSettings{
+				"Approver":      {Type: "user", JiraCustomField: "customfield_10114"},
+				"ProductOwner":  {Type: "user", JiraCustomField: "customfield_10115"},
+				"Justification": {Type: "text", JiraCustomField: "customfield_10116"},
+			},
+			RequiredFields: &v1.RequiredFieldsSpec{
+				StartTime:   v1.CustomFieldSettings{Type: "date", JiraCustomField: "customfield_10118"},
+				EndTime:     v1.CustomFieldSettings{Type: "date", JiraCustomField: "customfield_10119"},
+				ClusterRole: v1.CustomFieldSettings{Type: "date", JiraCustomField: "customfield_10117"},
+			},
+			Labels: []string{"label1", "label2"},
+			Environment: &v1.EnvironmentSpec{
+				Environment: "dev-test",
+				Cluster:     "minikube",
+			},
+			AdditionalCommentText: "This is a test comment.",
+		}
+
 		By("setting a jitRequest reconciler")
 		fakeRecorder = record.NewFakeRecorder(10)
 		reconciler = &JitRequestReconciler{
@@ -97,7 +104,7 @@ var _ = Describe("JitRequestReconciler jira_client Unit Tests", Ordered, Label("
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Attempting to pre-approve with invlaid start time")
-			result, err := reconciler.preApproveRequest(ctx, l, jitRequest, JiraTicket, additionalComments)
+			result, err := reconciler.preApproveRequest(ctx, l, jitRequest, JiraTicket, jitConfig.AdditionalCommentText)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result).NotTo(BeNil())
 			Expect(result.IsZero()).To(BeTrue())
@@ -120,11 +127,11 @@ var _ = Describe("JitRequestReconciler jira_client Unit Tests", Ordered, Label("
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Creating a Jira ticket")
-			ticket, err := reconciler.createJiraTicket(ctx, jitRequest, jiraProject, jiraIssueType, customFieldsConfig, requiredFieldsConfig, ticketLabels, targetEnvironment)
+			ticket, err := reconciler.createJiraTicket(ctx, jitRequest, jitConfig.JiraProject, jitConfig.JiraIssueType, jitConfig.CustomFields, jitConfig.RequiredFields, jitConfig.Labels, jitConfig.Environment)
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Attempting to pre-approve a valid JitRequest")
-			result, err := reconciler.preApproveRequest(ctx, l, jitRequest, ticket, additionalComments)
+			result, err := reconciler.preApproveRequest(ctx, l, jitRequest, ticket, jitConfig.AdditionalCommentText)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result).NotTo(BeNil())
 			Expect(result.IsZero()).To(BeFalse())
@@ -150,7 +157,7 @@ var _ = Describe("JitRequestReconciler jira_client Unit Tests", Ordered, Label("
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Creating a Jira ticket")
-			result, err := reconciler.createJiraTicket(ctx, jitRequest, jiraProject, jiraIssueType, customFieldsConfig, requiredFieldsConfig, ticketLabels, targetEnvironment)
+			result, err := reconciler.createJiraTicket(ctx, jitRequest, jitConfig.JiraProject, jitConfig.JiraIssueType, jitConfig.CustomFields, jitConfig.RequiredFields, jitConfig.Labels, jitConfig.Environment)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(Equal(JiraTicket))
 		})
@@ -164,7 +171,7 @@ var _ = Describe("JitRequestReconciler jira_client Unit Tests", Ordered, Label("
 			missingCustomFieldsConfig := map[string]v1.CustomFieldSettings{
 				"MissingField": {Type: "user", JiraCustomField: "customfield_10114"},
 			}
-			result, err := reconciler.createJiraTicket(ctx, jitRequest, jiraProject, jiraIssueType, missingCustomFieldsConfig, requiredFieldsConfig, ticketLabels, targetEnvironment)
+			result, err := reconciler.createJiraTicket(ctx, jitRequest, jitConfig.JiraProject, jitConfig.JiraIssueType, missingCustomFieldsConfig, jitConfig.RequiredFields, jitConfig.Labels, jitConfig.Environment)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(Equal("Skipped"))
 
@@ -188,7 +195,7 @@ var _ = Describe("JitRequestReconciler jira_client Unit Tests", Ordered, Label("
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Creating a jira ticket")
-			ticket, err := reconciler.createJiraTicket(ctx, jitRequest, jiraProject, jiraIssueType, customFieldsConfig, requiredFieldsConfig, ticketLabels, targetEnvironment)
+			ticket, err := reconciler.createJiraTicket(ctx, jitRequest, jitConfig.JiraProject, jitConfig.JiraIssueType, jitConfig.CustomFields, jitConfig.RequiredFields, jitConfig.Labels, jitConfig.Environment)
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Simulating rejecting a ticket")
@@ -207,7 +214,7 @@ var _ = Describe("JitRequestReconciler jira_client Unit Tests", Ordered, Label("
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Creating a jira ticket")
-			ticket, err := reconciler.createJiraTicket(ctx, jitRequest, jiraProject, jiraIssueType, customFieldsConfig, requiredFieldsConfig, ticketLabels, targetEnvironment)
+			ticket, err := reconciler.createJiraTicket(ctx, jitRequest, jitConfig.JiraProject, jitConfig.JiraIssueType, jitConfig.CustomFields, jitConfig.RequiredFields, jitConfig.Labels, jitConfig.Environment)
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Simulating updating a ticket")
@@ -225,7 +232,7 @@ var _ = Describe("JitRequestReconciler jira_client Unit Tests", Ordered, Label("
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Creating a jira ticket")
-			ticket, err := reconciler.createJiraTicket(ctx, jitRequest, jiraProject, jiraIssueType, customFieldsConfig, requiredFieldsConfig, ticketLabels, targetEnvironment)
+			ticket, err := reconciler.createJiraTicket(ctx, jitRequest, jitConfig.JiraProject, jitConfig.JiraIssueType, jitConfig.CustomFields, jitConfig.RequiredFields, jitConfig.Labels, jitConfig.Environment)
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Simulating completing a ticket")
@@ -243,7 +250,7 @@ var _ = Describe("JitRequestReconciler jira_client Unit Tests", Ordered, Label("
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Creating a jira ticket")
-			ticket, err := reconciler.createJiraTicket(ctx, jitRequest, jiraProject, jiraIssueType, customFieldsConfig, requiredFieldsConfig, ticketLabels, targetEnvironment)
+			ticket, err := reconciler.createJiraTicket(ctx, jitRequest, jitConfig.JiraProject, jitConfig.JiraIssueType, jitConfig.CustomFields, jitConfig.RequiredFields, jitConfig.Labels, jitConfig.Environment)
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Approving a jira ticket")
@@ -261,7 +268,7 @@ var _ = Describe("JitRequestReconciler jira_client Unit Tests", Ordered, Label("
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Creating a jira ticket")
-			ticket, err := reconciler.createJiraTicket(ctx, jitRequest, jiraProject, jiraIssueType, customFieldsConfig, requiredFieldsConfig, ticketLabels, targetEnvironment)
+			ticket, err := reconciler.createJiraTicket(ctx, jitRequest, jitConfig.JiraProject, jitConfig.JiraIssueType, jitConfig.CustomFields, jitConfig.RequiredFields, jitConfig.Labels, jitConfig.Environment)
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Checking getJiraApproval raises an error")

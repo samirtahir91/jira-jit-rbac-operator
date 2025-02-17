@@ -32,6 +32,7 @@ type jitRbacOperatorConfiguration struct {
 	retrievalFn func() *justintimev1.JustInTimeConfig
 }
 
+// NewJitRbacOperatorConfiguration returns new JustInTimeConfig or default config if not found in the cluster
 func NewJitRbacOperatorConfiguration(ctx context.Context, client client.Client, name string) Configuration {
 	return &jitRbacOperatorConfiguration{retrievalFn: func() *justintimev1.JustInTimeConfig {
 		config := &justintimev1.JustInTimeConfig{}

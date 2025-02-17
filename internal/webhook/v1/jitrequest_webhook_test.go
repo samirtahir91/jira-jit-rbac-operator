@@ -131,7 +131,7 @@ var _ = Describe("JitRequest Webhook", Ordered, func() {
 		})
 
 		It("Should deny update if cluster role is invalid", func() {
-			By("simulating a invalid cluster role update")
+			By("simulating an invalid cluster role update")
 			oldObj := obj
 			obj.Spec.ClusterRole = InvalidClusterRole
 			Expect(validator.ValidateUpdate(ctx, oldObj, obj)).Error().To(
@@ -140,7 +140,7 @@ var _ = Describe("JitRequest Webhook", Ordered, func() {
 		})
 
 		It("Should deny creation if cluster role is invalid", func() {
-			By("simulating a invalid cluster role")
+			By("simulating an invalid cluster role")
 			obj.Spec.ClusterRole = InvalidClusterRole
 			Expect(validator.ValidateCreate(ctx, obj)).Error().To(
 				MatchError(ContainSubstring("clusterRole must be one of")),
@@ -148,7 +148,7 @@ var _ = Describe("JitRequest Webhook", Ordered, func() {
 		})
 
 		It("Should deny creation if startTime is invalid", func() {
-			By("simulating a invalid startTime")
+			By("simulating an invalid startTime")
 			obj.Spec.StartTime = metav1.NewTime(metav1.Now().Add(-10 * time.Second))
 			Expect(validator.ValidateCreate(ctx, obj)).Error().To(
 				MatchError(ContainSubstring("start time must be after current time")),
@@ -156,7 +156,7 @@ var _ = Describe("JitRequest Webhook", Ordered, func() {
 		})
 
 		It("Should deny creation if endTime is invalid", func() {
-			By("simulating a invalid endTime")
+			By("simulating an invalid endTime")
 			obj.Spec.EndTime = metav1.NewTime(metav1.Now().Add(-10 * time.Second))
 			Expect(validator.ValidateCreate(ctx, obj)).Error().To(
 				MatchError(ContainSubstring("end time must be after startTime")),
@@ -164,7 +164,7 @@ var _ = Describe("JitRequest Webhook", Ordered, func() {
 		})
 
 		It("Should deny creation if any namespace is invalid if using NamespaceAllowedRegex in config", func() {
-			By("simulating a invalid namespace")
+			By("simulating an invalid namespace")
 			obj.Spec.Namespaces = []string{
 				InvalidNamespace,
 			}
@@ -174,7 +174,7 @@ var _ = Describe("JitRequest Webhook", Ordered, func() {
 		})
 
 		It("Should deny creation if any namespace is not matching required labels if defined", func() {
-			By("simulating a invalid namespace")
+			By("simulating an invalid namespace")
 			label := "foo"
 			labelValue := "bar"
 			obj.Spec.NamespaceLabels = map[string]string{
@@ -187,7 +187,7 @@ var _ = Describe("JitRequest Webhook", Ordered, func() {
 		})
 
 		It("Should deny creation if any JiraField is missing if it is a defined CustomField in config", func() {
-			By("simulating a invalid endTime")
+			By("simulating an invalid endTime")
 			obj.Spec.JiraFields = map[string]string{
 				"Approver":     "cptKeyes",
 				"ProductOwner": "Oni",

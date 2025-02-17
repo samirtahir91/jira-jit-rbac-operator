@@ -15,7 +15,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
-// Update jira with comment
+// updateJiraTicket updates a jira ticket with a comment
 func (r *JitRequestReconciler) updateJiraTicket(ctx context.Context, jiraTicket, comment string) error {
 	l := log.FromContext(ctx)
 
@@ -39,7 +39,7 @@ func (r *JitRequestReconciler) updateJiraTicket(ctx context.Context, jiraTicket,
 	return nil
 }
 
-// Complete jira with comment
+// completeJiraTicket completes a jira ticket with a comment
 func (r *JitRequestReconciler) completeJiraTicket(ctx context.Context, jitRequest *justintimev1.JitRequest, completedTransitionID string) error {
 	l := log.FromContext(ctx)
 
@@ -73,7 +73,7 @@ func (r *JitRequestReconciler) completeJiraTicket(ctx context.Context, jitReques
 	return nil
 }
 
-// Check Jira ticket is approved
+// getJiraApproval checks a Jira ticket is approved
 func (r *JitRequestReconciler) getJiraApproval(ctx context.Context, jitRequest *justintimev1.JitRequest, jiraWorkflowApproveStatus string) error {
 	l := log.FromContext(ctx)
 	l.Info("Checking Jira ticket approval", "jit request", jitRequest)
@@ -101,7 +101,7 @@ func (r *JitRequestReconciler) getJiraApproval(ctx context.Context, jitRequest *
 	return fmt.Errorf("failed on jira approval")
 }
 
-// Get and return account ID for a Jira user by email - assumes single email per user and gets 1st result
+// getNameByEmail gets and returns an account ID for a Jira user by email - assumes single email per user and gets the 1st result
 func (r *JitRequestReconciler) getNameByEmail(email string) (string, error) {
 
 	type User struct {
@@ -136,7 +136,7 @@ func (r *JitRequestReconciler) getNameByEmail(email string) (string, error) {
 	return accountId, nil
 }
 
-// Helper function for createJiraTicket to build custom fields in jira ticket payload
+// addCustomField is a helper function for createJiraTicket to build custom fields in jira ticket payload
 func addCustomField(ctx context.Context, customFields *models.CustomFields, fieldType, jiraCustomField, value string) {
 	l := log.FromContext(ctx)
 
@@ -161,17 +161,8 @@ func addCustomField(ctx context.Context, customFields *models.CustomFields, fiel
 	}
 }
 
-// Create a jira ticket for a JitRequest
-func (r *JitRequestReconciler) createJiraTicket(
-	ctx context.Context,
-	jitRequest *justintimev1.JitRequest,
-	jiraProject,
-	jiraIssueType string,
-	customFieldsConfig map[string]justintimev1.CustomFieldSettings,
-	requiredFieldsConfig *justintimev1.RequiredFieldsSpec,
-	ticketLabels []string,
-	targetEnvironment *justintimev1.EnvironmentSpec,
-) (string, error) {
+// createJiraTicket creates a jira ticket for a JitRequest
+func (r *JitRequestReconciler) createJiraTicket(ctx context.Context, jitRequest *justintimev1.JitRequest, jiraProject, jiraIssueType string, customFieldsConfig map[string]justintimev1.CustomFieldSettings, requiredFieldsConfig *justintimev1.RequiredFieldsSpec, ticketLabels []string, targetEnvironment *justintimev1.EnvironmentSpec) (string, error) {
 	l := log.FromContext(ctx)
 
 	l.Info("Creating Jira ticket", "jiraTicket", jitRequest)
@@ -270,7 +261,7 @@ func (r *JitRequestReconciler) createJiraTicket(
 	return createdIssue.Key, nil
 }
 
-// Reject jira with comment
+// rejectJiraTicket rejects a jira ticket with comment
 func (r *JitRequestReconciler) rejectJiraTicket(ctx context.Context, jitRequest *justintimev1.JitRequest, rejectedTransitionID string) error {
 	l := log.FromContext(ctx)
 
@@ -304,13 +295,8 @@ func (r *JitRequestReconciler) rejectJiraTicket(ctx context.Context, jitRequest 
 	return nil
 }
 
-// Pre-approve the JitRequest, update the Jira ticke and queue for start time
-func (r *JitRequestReconciler) preApproveRequest(
-	ctx context.Context,
-	l logr.Logger,
-	jitRequest *justintimev1.JitRequest,
-	jiraIssueKey, additionalComments string,
-) (ctrl.Result, error) {
+// preApproveRequest pre-approves a JitRequest, updates the Jira ticket and re-queues for start time
+func (r *JitRequestReconciler) preApproveRequest(ctx context.Context, l logr.Logger, jitRequest *justintimev1.JitRequest, jiraIssueKey, additionalComments string) (ctrl.Result, error) {
 	startTime := jitRequest.Spec.StartTime.Time
 
 	if startTime.After(time.Now()) {

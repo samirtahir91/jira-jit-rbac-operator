@@ -21,21 +21,15 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
-// Fetch a JitRequest
+// fetchJitRequest fetches and returns a JitRequest
 func (r *JitRequestReconciler) fetchJitRequest(ctx context.Context, namespacedName types.NamespacedName) (*justintimev1.JitRequest, error) {
 	jitRequest := &justintimev1.JitRequest{}
 	err := r.Get(ctx, namespacedName, jitRequest)
 	return jitRequest, err
 }
 
-// Update JitRequest status and message with retry up to maxAttempts attempts
-func (r *JitRequestReconciler) updateStatus(
-	ctx context.Context,
-	jitRequest *justintimev1.JitRequest,
-	status,
-	message,
-	jiraTicket string,
-) error {
+// updateStatus updates a JitRequest status and message with retry up to maxAttempts attempts
+func (r *JitRequestReconciler) updateStatus(ctx context.Context, jitRequest *justintimev1.JitRequest, status, message, jiraTicket string) error {
 	jitRequest.Status.State = status
 	jitRequest.Status.Message = message
 	jitRequest.Status.JiraTicket = jiraTicket
@@ -53,7 +47,7 @@ func (r *JitRequestReconciler) updateStatus(
 	return nil
 }
 
-// Delete a JitRequest
+// deleteJitRequest deletes a JitRequest
 func (r *JitRequestReconciler) deleteJitRequest(ctx context.Context, jitRequest *justintimev1.JitRequest) error {
 	l := log.FromContext(ctx)
 	if err := r.Client.Delete(ctx, jitRequest); err != nil {
@@ -64,7 +58,7 @@ func (r *JitRequestReconciler) deleteJitRequest(ctx context.Context, jitRequest 
 	return nil
 }
 
-// Raise event in operator namespace
+// raiseEvent raises an event in the operator namespace
 func (r *JitRequestReconciler) raiseEvent(obj client.Object, eventType, reason, message string) {
 	eventRef := &corev1.ObjectReference{
 		Kind:       obj.GetObjectKind().GroupVersionKind().Kind,
@@ -77,13 +71,8 @@ func (r *JitRequestReconciler) raiseEvent(obj client.Object, eventType, reason, 
 	r.Recorder.Event(eventRef, eventType, reason, message)
 }
 
-// Reject an invalid namespace
-func (r *JitRequestReconciler) rejectInvalidNamespace(
-	ctx context.Context,
-	l logr.Logger,
-	jitRequest *justintimev1.JitRequest,
-	jiraIssueKey, namespace, err string,
-) (ctrl.Result, error) {
+// rejectInvalidNamespace rejects an invalid namespace
+func (r *JitRequestReconciler) rejectInvalidNamespace(ctx context.Context, l logr.Logger, jitRequest *justintimev1.JitRequest, jiraIssueKey, namespace, err string) (ctrl.Result, error) {
 	errorMsg := fmt.Sprintf("Namespace(s) %s not validated | Error: %s", namespace, err)
 	r.raiseEvent(jitRequest, "Warning", EventValidationFailed, errorMsg)
 	if err := r.updateStatus(ctx, jitRequest, StatusRejected, errorMsg, jiraIssueKey); err != nil {
@@ -93,13 +82,8 @@ func (r *JitRequestReconciler) rejectInvalidNamespace(
 	return ctrl.Result{}, nil
 }
 
-// Reject an invalid cluster role
-func (r *JitRequestReconciler) rejectInvalidRole(
-	ctx context.Context,
-	l logr.Logger,
-	jitRequest *justintimev1.JitRequest,
-	jiraIssueKey string,
-) (ctrl.Result, error) {
+// rejectInvalidRole rejects an invalid cluster role
+func (r *JitRequestReconciler) rejectInvalidRole(ctx context.Context, l logr.Logger, jitRequest *justintimev1.JitRequest, jiraIssueKey string) (ctrl.Result, error) {
 	errorMsg := fmt.Sprintf("ClusterRole '%s' is not allowed", jitRequest.Spec.ClusterRole)
 	r.raiseEvent(jitRequest, "Warning", EventValidationFailed, errorMsg)
 	if err := r.updateStatus(ctx, jitRequest, StatusRejected, errorMsg, jiraIssueKey); err != nil {
@@ -109,7 +93,7 @@ func (r *JitRequestReconciler) rejectInvalidRole(
 	return ctrl.Result{}, nil
 }
 
-// Delete rolebinding in case of k8s GC failed to delete
+// deleteOwnedObjects deletes role binding(s) in case of k8s GC failed to delete
 func (r *JitRequestReconciler) deleteOwnedObjects(ctx context.Context, jitRequest *justintimev1.JitRequest) error {
 	for _, namespace := range jitRequest.Spec.Namespaces {
 		roleBindings := &rbacv1.RoleBindingList{}
@@ -135,12 +119,12 @@ func (r *JitRequestReconciler) deleteOwnedObjects(ctx context.Context, jitReques
 	return nil
 }
 
-// Check and return true if something already exists
+// isAlreadyExistsError checks and return true if something already exists
 func isAlreadyExistsError(err error) bool {
 	return err != nil && apierrors.IsAlreadyExists(err)
 }
 
-// Create rolebinding(s) for a JitRequest's namespaces
+// createRoleBinding creates role binding(s) for a JitRequest's namespaces
 func (r *JitRequestReconciler) createRoleBinding(ctx context.Context, jitRequest *justintimev1.JitRequest) error {
 	// Add reporter to subject
 	subjects := []rbacv1.Subject{

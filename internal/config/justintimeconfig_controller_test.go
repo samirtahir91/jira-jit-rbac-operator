@@ -18,67 +18,114 @@ package config
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
+	"os"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/types"
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	justintimev1 "jira-jit-rbac-operator/api/v1"
+	"jira-jit-rbac-operator/test/utils"
+	"os/exec"
+
+	"k8s.io/client-go/kubernetes/scheme"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/config"
 )
 
-var _ = Describe("JustInTimeConfig Controller", func() {
-	Context("When reconciling a resource", func() {
-		const resourceName = "test-resource"
+const (
+	ValidClusterRole string = "edit"
+)
 
-		ctx := context.Background()
+var (
+	TestNamespace = os.Getenv("OPERATOR_NAMESPACE")
+)
 
-		typeNamespacedName := types.NamespacedName{
-			Name:      resourceName,
-			Namespace: "default", // TODO(user):Modify as needed
-		}
-		justintimeconfig := &justintimev1.JustInTimeConfig{}
+// init os vars
+func init() {
+	if TestNamespace == "" {
+		panic(fmt.Errorf("OPERATOR_NAMESPACE environment variable(s) not set"))
+	}
+}
 
-		BeforeEach(func() {
-			By("creating the custom resource for the Kind JustInTimeConfig")
-			err := k8sClient.Get(ctx, typeNamespacedName, justintimeconfig)
-			if err != nil && errors.IsNotFound(err) {
-				resource := &justintimev1.JustInTimeConfig{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      resourceName,
-						Namespace: "default",
-					},
-					// TODO(user): Specify other spec details if needed.
-				}
-				Expect(k8sClient.Create(ctx, resource)).To(Succeed())
+var _ = Describe("JustInTimeConfig Controller", Ordered, Label("integration"), func() {
+
+	BeforeAll(func() {
+		By("removing manager config")
+		cmd := exec.Command("kubectl", "delete", "jitcfg", TestJitConfig)
+		_, _ = utils.Run(cmd)
+
+	})
+
+	AfterAll(func() {
+		By("removing manager config")
+		cmd := exec.Command("kubectl", "delete", "jitcfg", TestJitConfig)
+		_, _ = utils.Run(cmd)
+	})
+
+	Context("When initialising a context and K8s client", func() {
+		It("should be successfully initialised", func() {
+			By("Creating the ctx and client")
+			ctx = context.TODO()
+			err := justintimev1.AddToScheme(scheme.Scheme)
+			Expect(err).NotTo(HaveOccurred())
+			cfg, err := config.GetConfig()
+			if err != nil {
+				fmt.Printf("Failed to load kubeconfig: %v\n", err)
+				return
 			}
+			k8sClient, err = client.New(cfg, client.Options{Scheme: scheme.Scheme})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(k8sClient).NotTo(BeNil())
 		})
+	})
 
-		AfterEach(func() {
-			// TODO(user): Cleanup logic after each test, like removing the resource instance.
-			resource := &justintimev1.JustInTimeConfig{}
-			err := k8sClient.Get(ctx, typeNamespacedName, resource)
+	Context("When creating the JustInTime config object", func() {
+		It("should successfully load the config and write the config file", func() {
+			By("Creating the operator JustInTimeConfig")
+			err := utils.CreateJitConfig(ctx, k8sClient, ValidClusterRole, TestNamespace)
 			Expect(err).NotTo(HaveOccurred())
 
-			By("Cleanup the specific resource instance JustInTimeConfig")
-			Expect(k8sClient.Delete(ctx, resource)).To(Succeed())
-		})
-		It("should successfully reconcile the resource", func() {
-			By("Reconciling the created resource")
-			controllerReconciler := &JustInTimeConfigReconciler{
-				Client: k8sClient,
-				Scheme: k8sClient.Scheme(),
+			By("Checking the config json file matches expected config")
+			expectedConfig := justintimev1.JustInTimeConfigSpec{
+				AllowedClusterRoles:       []string{"edit"},
+				JiraWorkflowApproveStatus: "Approved",
+				RejectedTransitionID:      "21",
+				JiraProject:               "IAM",
+				JiraIssueType:             "Access Request",
+				CompletedTransitionID:     "41",
+				RequiredFields: &justintimev1.RequiredFieldsSpec{
+					StartTime:   justintimev1.CustomFieldSettings{Type: "date", JiraCustomField: "customfield_10118"},
+					EndTime:     justintimev1.CustomFieldSettings{Type: "date", JiraCustomField: "customfield_10119"},
+					ClusterRole: justintimev1.CustomFieldSettings{Type: "date", JiraCustomField: "customfield_10117"},
+				},
+				CustomFields: map[string]justintimev1.CustomFieldSettings{
+					"Approver":      {Type: "user", JiraCustomField: "customfield_10114"},
+					"ProductOwner":  {Type: "user", JiraCustomField: "customfield_10115"},
+					"Justification": {Type: "text", JiraCustomField: "customfield_10116"},
+				},
+				Labels: []string{
+					"default-config",
+				},
+				Environment: &justintimev1.EnvironmentSpec{
+					Environment: "dev-test",
+					Cluster:     "minikube",
+				},
+				AdditionalCommentText: "config: default",
+				NamespaceAllowedRegex: ".*",
 			}
 
-			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
-				NamespacedName: typeNamespacedName,
-			})
+			// Read the generated config file
+			data, err := os.ReadFile(ConfigCacheFilePath + "/" + ConfigFile)
 			Expect(err).NotTo(HaveOccurred())
-			// TODO(user): Add more specific assertions depending on your controller's reconciliation logic.
-			// Example: If you expect a certain status condition after reconciliation, verify it here.
+
+			var generatedConfig justintimev1.JustInTimeConfigSpec
+			err = json.Unmarshal(data, &generatedConfig)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Compare the generated config with the expected config
+			Expect(expectedConfig).To(Equal(generatedConfig))
 		})
 	})
 })
