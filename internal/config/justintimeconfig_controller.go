@@ -48,7 +48,6 @@ type JustInTimeConfigReconciler struct {
 	Scheme *runtime.Scheme
 }
 
-// Reconcile
 func (c *JustInTimeConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	l := log.FromContext(ctx)
 	l.Info("JustInTimeConfig reconciliation started", "request.name", req.Name)
@@ -104,7 +103,7 @@ func (c *JustInTimeConfigReconciler) Reconcile(ctx context.Context, req ctrl.Req
 	return ctrl.Result{}, nil
 }
 
-// Save configuration to a file
+// SaveConfigToFile saves configuration to a file
 func (c *JustInTimeConfigReconciler) SaveConfigToFile(ctx context.Context, cfg configuration.Configuration, filePath string, fileName string) error {
 	l := log.FromContext(ctx)
 	// Create dir if does not exist

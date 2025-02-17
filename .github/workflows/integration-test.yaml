@@ -36,12 +36,8 @@ jobs:
       - name: Running Tests
         run: |
           go mod tidy
-          
           make kind-create
-          
-          export UNIT_TEST=false
-          export OPERATOR_NAMESPACE=jira-jit-int-test
-          USE_EXISTING_CLUSTER=true make test
+          make test
 
       - name: Send the coverage output
         if: matrix.os != 'macos-latest'

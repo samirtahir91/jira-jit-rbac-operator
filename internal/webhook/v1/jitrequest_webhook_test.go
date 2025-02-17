@@ -36,7 +36,6 @@ var (
 )
 
 const (
-	JitRequestName     = "e2e-jit-test"
 	TestJitConfig      = "jira-jit-rbac-operator-default"
 	ValidClusterRole   = "edit"
 	InvalidClusterRole = "admin"

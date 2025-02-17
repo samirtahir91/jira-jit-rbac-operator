@@ -32,9 +32,8 @@ var (
 )
 
 const (
-	JitRequestName  = "e2e-jit-test"
-	RoleBindingName = JitRequestName + "-jit"
-	TestJitConfig   = "jira-jit-rbac-operator-default"
+	JitRequestName = "e2e-jit-test"
+	TestJitConfig  = "jira-jit-rbac-operator-default"
 )
 
 // Function to initialise os vars

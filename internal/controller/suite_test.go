@@ -42,7 +42,7 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 
 	"jira-jit-rbac-operator/internal/config"
-	utils "jira-jit-rbac-operator/test/utils"
+	"jira-jit-rbac-operator/test/utils"
 	// +kubebuilder:scaffold:imports
 )
 

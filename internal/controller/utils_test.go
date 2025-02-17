@@ -3,7 +3,7 @@ package controller
 import (
 	"fmt"
 	v1 "jira-jit-rbac-operator/api/v1"
-	test_utils "jira-jit-rbac-operator/test/utils"
+	testUtils "jira-jit-rbac-operator/test/utils"
 	"os/exec"
 	"time"
 
@@ -28,7 +28,7 @@ var _ = Describe("JitRequestReconciler utils Unit Tests", Ordered, Label("unit",
 			UID:  "foo",
 		},
 		Spec: v1.JitRequestSpec{
-			ClusterRole: test_utils.ValidClusterRole,
+			ClusterRole: testUtils.ValidClusterRole,
 			Reporter:    "master-chief@unsc.com",
 			Namespaces: []string{
 				TestNamespace,
@@ -61,46 +61,46 @@ var _ = Describe("JitRequestReconciler utils Unit Tests", Ordered, Label("unit",
 
 		By("removing manager config")
 		cmd := exec.Command("kubectl", "delete", "jitcfg", TestJitConfig)
-		_, _ = test_utils.Run(cmd)
+		_, _ = testUtils.Run(cmd)
 
 		By("removing jitRequest")
 		cmd = exec.Command("kubectl", "delete", "jitreq", JitRequestName)
-		_, _ = test_utils.Run(cmd)
+		_, _ = testUtils.Run(cmd)
 
 		By("removing manager namespace")
 		cmd = exec.Command("kubectl", "delete", "ns", TestNamespace)
-		_, _ = test_utils.Run(cmd)
+		_, _ = testUtils.Run(cmd)
 
 		By("creating manager namespace")
-		err := test_utils.CreateNamespace(ctx, k8sClient, TestNamespace)
+		err := testUtils.CreateNamespace(ctx, k8sClient, TestNamespace)
 		Expect(err).NotTo(HaveOccurred())
 	})
 
 	AfterAll(func() {
 		By("removing manager namespace")
 		cmd := exec.Command("kubectl", "delete", "ns", TestNamespace)
-		_, _ = test_utils.Run(cmd)
+		_, _ = testUtils.Run(cmd)
 
 		By("removing manager config")
 		cmd = exec.Command("kubectl", "delete", "jitcfg", TestJitConfig)
-		_, _ = test_utils.Run(cmd)
+		_, _ = testUtils.Run(cmd)
 
 		By("removing jitRequest")
 		cmd = exec.Command("kubectl", "delete", "jitreq", JitRequestName)
-		_, _ = test_utils.Run(cmd)
+		_, _ = testUtils.Run(cmd)
 	})
 
 	AfterEach(func() {
 		By("removing jitRequest")
 		cmd := exec.Command("kubectl", "delete", "jitreq", JitRequestName)
-		_, _ = test_utils.Run(cmd)
+		_, _ = testUtils.Run(cmd)
 	})
 
 	Describe("fetchJitRequest", func() {
 
 		It("should fetch a JitRequest successfully", func() {
 			// Create JitRequest
-			_, err := test_utils.CreateJitRequest(ctx, reconciler.Client, 10, test_utils.ValidClusterRole, TestNamespace)
+			_, err := testUtils.CreateJitRequest(ctx, reconciler.Client, 10, testUtils.ValidClusterRole, TestNamespace)
 			Expect(err).NotTo(HaveOccurred())
 
 			namespacedName := types.NamespacedName{
@@ -117,7 +117,7 @@ var _ = Describe("JitRequestReconciler utils Unit Tests", Ordered, Label("unit",
 
 		It("should update a JitRequest status successfully", func() {
 			// Create JitRequest
-			jitRequest, err := test_utils.CreateJitRequest(ctx, reconciler.Client, 10, test_utils.ValidClusterRole, TestNamespace)
+			jitRequest, err := testUtils.CreateJitRequest(ctx, reconciler.Client, 10, testUtils.ValidClusterRole, TestNamespace)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Check updateStatus
@@ -143,7 +143,7 @@ var _ = Describe("JitRequestReconciler utils Unit Tests", Ordered, Label("unit",
 
 		It("should delete a JitRequest successfully", func() {
 			// Create JitRequest
-			jitRequest, err := test_utils.CreateJitRequest(ctx, reconciler.Client, 10, test_utils.ValidClusterRole, TestNamespace)
+			jitRequest, err := testUtils.CreateJitRequest(ctx, reconciler.Client, 10, testUtils.ValidClusterRole, TestNamespace)
 			Expect(err).NotTo(HaveOccurred())
 
 			err = reconciler.deleteJitRequest(ctx, jitRequest)
@@ -183,7 +183,7 @@ var _ = Describe("JitRequestReconciler utils Unit Tests", Ordered, Label("unit",
 
 		It("should reject invalid namespaces", func() {
 			// Create JitRequest
-			jitRequest, err := test_utils.CreateJitRequest(ctx, reconciler.Client, 10, test_utils.ValidClusterRole, TestNamespace)
+			jitRequest, err := testUtils.CreateJitRequest(ctx, reconciler.Client, 10, testUtils.ValidClusterRole, TestNamespace)
 			Expect(err).NotTo(HaveOccurred())
 
 			_, err = reconciler.rejectInvalidNamespace(ctx, l, jitRequest, "jiraIssueKey", "namespace", "error")
@@ -203,7 +203,7 @@ var _ = Describe("JitRequestReconciler utils Unit Tests", Ordered, Label("unit",
 		It("should reject invalid cluster role", func() {
 
 			// Create JitRequest
-			jitRequest, err := test_utils.CreateJitRequest(ctx, reconciler.Client, 10, test_utils.ValidClusterRole, TestNamespace)
+			jitRequest, err := testUtils.CreateJitRequest(ctx, reconciler.Client, 10, testUtils.ValidClusterRole, TestNamespace)
 			Expect(err).NotTo(HaveOccurred())
 
 			_, err = reconciler.rejectInvalidRole(ctx, l, jitRequest, "jiraIssueKey")

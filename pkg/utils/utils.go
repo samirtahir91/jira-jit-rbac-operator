@@ -33,7 +33,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// Read operator configuration from config file
+// ReadConfigFromFile Read operator configuration from config file
 func ReadConfigFromFile() (*justintimev1.JustInTimeConfigSpec, error) {
 	// common lock for concurrent reads
 	config.ConfigLock.RLock()
@@ -44,15 +44,15 @@ func ReadConfigFromFile() (*justintimev1.JustInTimeConfigSpec, error) {
 		return nil, fmt.Errorf("failed to read configuration file: %w", err)
 	}
 
-	var config justintimev1.JustInTimeConfigSpec
-	if err := json.Unmarshal(data, &config); err != nil {
+	var newConfig justintimev1.JustInTimeConfigSpec
+	if err := json.Unmarshal(data, &newConfig); err != nil {
 		return nil, fmt.Errorf("failed to parse configuration file: %w", err)
 	}
 
-	return &config, nil
+	return &newConfig, nil
 }
 
-// checks if a string is present in a slice.
+// Contains checks if a string is present in a slice.
 func Contains(slice []string, item string) bool {
 	for _, s := range slice {
 		if s == item {
@@ -62,7 +62,7 @@ func Contains(slice []string, item string) bool {
 	return false
 }
 
-// Validate namespace name with regex if provided
+// ValidateNamespaceRegex Validate namespace name with regex if provided
 func ValidateNamespaceRegex(namespaces []string) (string, error) {
 	if config.NamespaceAllowedRegex != nil {
 		for _, namespace := range namespaces {
@@ -78,7 +78,7 @@ func ValidateNamespaceRegex(namespaces []string) (string, error) {
 	return "", nil
 }
 
-// Validate namespace(s) have namespaceLabels
+// ValidateNamespaceLabels Validate namespace(s) have namespaceLabels
 func ValidateNamespaceLabels(
 	ctx context.Context,
 	jitRequest *justintimev1.JitRequest,
@@ -112,7 +112,7 @@ func ValidateNamespaceLabels(
 		}
 	}
 
-	// fmt label mmsg for error
+	// fmt label msg for error
 	labelPairs := make([]string, 0, len(jitRequest.Spec.NamespaceLabels))
 	for key, value := range jitRequest.Spec.NamespaceLabels {
 		labelPairs = append(labelPairs, fmt.Sprintf("%s=%s", key, value))

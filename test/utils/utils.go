@@ -76,7 +76,7 @@ func GetAndLoadCertMgrImg() {
 	}
 }
 
-// Function to create a namespace
+// CreateNamespace Function to create a namespace
 func CreateNamespace(ctx context.Context, k8sClient client.Client, namespace string) error {
 
 	ns := &corev1.Namespace{
@@ -92,7 +92,7 @@ func CreateNamespace(ctx context.Context, k8sClient client.Client, namespace str
 	return nil
 }
 
-// Function to check and wait for an event in a namespace
+// CheckEvent Function to check and wait for an event in a namespace
 func CheckEvent(
 	ctx context.Context,
 	k8sClient client.Client,
@@ -169,7 +169,7 @@ func CheckRoleBindingRemoved(ctx context.Context, k8sClient client.Client, names
 	return nil
 }
 
-// Function to check RoleBinding exists
+// CheckRoleBindingExists Function to check RoleBinding exists
 func CheckRoleBindingExists(ctx context.Context, k8sClient client.Client, namespace string, name string) error {
 	Eventually(func() bool {
 		roleBinding := &rbacv1.RoleBinding{}
@@ -186,7 +186,7 @@ func CheckRoleBindingExists(ctx context.Context, k8sClient client.Client, namesp
 	return nil
 }
 
-// Function to check the status of a JustInTimeRequest
+// CheckJitStatus Function to check the status of a JustInTimeRequest
 func CheckJitStatus(
 	ctx context.Context,
 	k8sClient client.Client,
@@ -211,7 +211,7 @@ func CheckJitStatus(
 	return nil
 }
 
-// Function to create a JustInTimeRequest with a startTime delay in seconds
+// CreateJitRequest Function to create a JustInTimeRequest with a startTime delay in seconds
 func CreateJitRequest(
 	ctx context.Context,
 	k8sClient client.Client,
@@ -253,7 +253,7 @@ func CreateJitRequest(
 	return jit, nil
 }
 
-// Function to create a JustInTimeConfig
+// CreateJitConfig Function to create a JustInTimeConfig
 func CreateJitConfig(ctx context.Context, k8sClient client.Client, clusterRole, namespace string) error {
 
 	jitCfg := &justintimev1.JustInTimeConfig{

@@ -6,14 +6,14 @@
 
 # jira-jit-rbac-operator 
 
-The `jira-jit-rbac-operator` is a Kubernetes operator that creates short-lived rolebindings for users based on a JitRequest custom resource. It integrates with a configurable Jira Workflow, the operator submitts a Jira ticket in a Jira Project for approval by a Human before granting the role-binding for the requested time period. It empowers self-service of Just-In-Time privileged access using Kubernetes RBAC.
+The `jira-jit-rbac-operator` is a Kubernetes operator that creates short-lived rolebindings for users based on a JitRequest custom resource. It integrates with a configurable Jira Workflow, the operator submits a Jira ticket in a Jira Project for approval by a Human before granting the role-binding for the requested time period. It empowers self-service of Just-In-Time privileged access using Kubernetes RBAC.
 
 ## ToDo
 
 ## Description
 
 ### Key Features
-- Uses a custom cluster scoped resource `JitRequest`, where a user creates a JitReuest with:
+- Uses a custom cluster scoped resource `JitRequest`, where a user creates a JitRequest with:
   - reporter
   - clusterRole
   - additionalEmails (optional users to also add to role binding)
@@ -56,9 +56,9 @@ You will need to create the required custom fields in Jira to be used by the wor
 | Start Time    | Date and time  |
 | End Time      | Date and time  |
 
-The sample workflow used is [here](samples/workflow.xml), you need to [import](https://confluence.atlassian.com/display/ADMINJIRASERVER088/Using+XML+to+create+a+workflow)/create an identical Workflow in your Jira Project (the IDs of fields etc are configurable as below).
+The sample workflow used is [here](samples/workflow.xml), you need to [import](https://confluence.atlassian.com/display/ADMINJIRASERVER088/Using+XML+to+create+a+workflow)/create an identical Workflow in your Jira Project (the IDs of fields etc. are configurable as below).
 
-You must define these with the values according to your Jira Project and Workflow (to map the fields from your workflow to the opertor's config):
+You must define these with the values according to your Jira Project and Workflow (to map the fields from your workflow to the operator's config):
 
 | **Field**                | **Description**                                                                 |
 |--------------------------|---------------------------------------------------------------------------------|
@@ -231,25 +231,20 @@ kubectl apply -k config/samples/
 - Tests will be run against a real cluster, i.e. Kind or Minikube
 ```sh
 make kind-create # optional to use a kind cluster
-export OPERATOR_NAMESPACE=jira-jit-int-test
-export UNIT_TEST=true
-USE_EXISTING_CLUSTER=true make unit-test
+make unit-test
 ```
 
 ### Integration Testing
 - Tests will be run against a real cluster, i.e. Kind or Minikube
 ```sh
 make kind-create # optional to use a kind cluster
-export OPERATOR_NAMESPACE=jira-jit-int-test
-export UNIT_TEST=false
-USE_EXISTING_CLUSTER=true make test
+make test
 ```
 
 ### Webhook Testing
 - Tests will be not run against a real cluster
 ```sh
-export OPERATOR_NAMESPACE=jira-jit-int-test
-USE_EXISTING_CLUSTER=false make test-webhooks
+make test-webhooks
 ```
 
 ### E2E Testing

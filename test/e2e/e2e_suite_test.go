@@ -25,7 +25,7 @@ import (
 	"testing"
 
 	"k8s.io/client-go/kubernetes/scheme"
-	config "sigs.k8s.io/controller-runtime/pkg/client/config"
+	"sigs.k8s.io/controller-runtime/pkg/client/config"
 
 	justintimev1 "jira-jit-rbac-operator/api/v1"
 
@@ -33,7 +33,7 @@ import (
 	. "github.com/onsi/gomega"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	utils "jira-jit-rbac-operator/test/utils"
+	"jira-jit-rbac-operator/test/utils"
 )
 
 var (
