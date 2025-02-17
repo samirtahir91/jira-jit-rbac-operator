@@ -27,6 +27,4 @@ jobs:
       - name: Running Tests
         run: |
           go mod tidy
-
-          export OPERATOR_NAMESPACE=jira-jit-int-test
-          USE_EXISTING_CLUSTER=false make test-webhooks
+          make test-webhooks

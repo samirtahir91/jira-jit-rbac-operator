@@ -12,7 +12,7 @@ import (
 	. "github.com/onsi/gomega" //nolint:golint,revive
 	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	config "sigs.k8s.io/controller-runtime/pkg/client/config"
+	"sigs.k8s.io/controller-runtime/pkg/client/config"
 )
 
 const (
@@ -23,10 +23,9 @@ const (
 	TestJiraWorkflowToDoStatus        = "ToDo"
 	TestJiraWorkflowApproved          = "Approved"
 	EventValidationFailed             = "ValidationFailed"
-	StatusRejected                    = "Rejected"
-	StatusPreApproved                 = "Pre-Approved"
-	StatusSucceeded                   = "Succeeded"
-	Skipped                           = "Skipped"
+
+	StatusPreApproved = "Pre-Approved"
+	StatusSucceeded   = "Succeeded"
 )
 
 var k8sClient client.Client

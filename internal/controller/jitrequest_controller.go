@@ -33,7 +33,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	justintimev1 "jira-jit-rbac-operator/api/v1"
-	utils "jira-jit-rbac-operator/pkg/utils"
+	"jira-jit-rbac-operator/pkg/utils"
 )
 
 var OperatorNamespace = os.Getenv("OPERATOR_NAMESPACE")

@@ -36,7 +36,7 @@ import (
 
 // nolint:unused
 // log is for logging in this package.
-var jitrequestlog = logf.Log.WithName("jitrequest-resource")
+var jitRequestLog = logf.Log.WithName("jitrequest-resource")
 var globalClient client.Client
 
 // SetupJitRequestWebhookWithManager registers the webhook for JitRequest in the manager.
@@ -120,13 +120,13 @@ func validateJitRequestSpec(ctx context.Context, jitRequest *justintimev1.JitReq
 
 // ValidateCreate implements webhook.CustomValidator so a webhook will be registered for the type JitRequest.
 func (v *JitRequestCustomValidator) ValidateCreate(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
-	jitrequest, ok := obj.(*justintimev1.JitRequest)
+	jitRequest, ok := obj.(*justintimev1.JitRequest)
 	if !ok {
 		return nil, fmt.Errorf("expected a JitRequest object but got %T", obj)
 	}
-	jitrequestlog.Info("Validation for JitRequest upon creation", "name", jitrequest.GetName())
+	jitRequestLog.Info("Validation for JitRequest upon creation", "name", jitRequest.GetName())
 
-	fieldErr, err := validateJitRequestSpec(ctx, jitrequest)
+	fieldErr, err := validateJitRequestSpec(ctx, jitRequest)
 	if err != nil {
 		return nil, err
 	}
@@ -139,12 +139,12 @@ func (v *JitRequestCustomValidator) ValidateCreate(ctx context.Context, obj runt
 
 // ValidateUpdate implements webhook.CustomValidator so a webhook will be registered for the type JitRequest.
 func (v *JitRequestCustomValidator) ValidateUpdate(ctx context.Context, oldObj, newObj runtime.Object) (admission.Warnings, error) {
-	jitrequest, ok := newObj.(*justintimev1.JitRequest)
+	jitRequest, ok := newObj.(*justintimev1.JitRequest)
 	if !ok {
 		return nil, fmt.Errorf("expected a JitRequest object for the newObj but got %T", newObj)
 	}
-	jitrequestlog.Info("Validation for JitRequest upon update", "name", jitrequest.GetName())
-	fieldErr, err := validateJitRequestSpec(ctx, jitrequest)
+	jitRequestLog.Info("Validation for JitRequest upon update", "name", jitRequest.GetName())
+	fieldErr, err := validateJitRequestSpec(ctx, jitRequest)
 	if err != nil {
 		return nil, err
 	}
@@ -157,11 +157,11 @@ func (v *JitRequestCustomValidator) ValidateUpdate(ctx context.Context, oldObj, 
 
 // ValidateDelete implements webhook.CustomValidator so a webhook will be registered for the type JitRequest.
 func (v *JitRequestCustomValidator) ValidateDelete(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
-	jitrequest, ok := obj.(*justintimev1.JitRequest)
+	jitRequest, ok := obj.(*justintimev1.JitRequest)
 	if !ok {
 		return nil, fmt.Errorf("expected a JitRequest object but got %T", obj)
 	}
-	jitrequestlog.Info("Validation for JitRequest upon deletion", "name", jitrequest.GetName())
+	jitRequestLog.Info("Validation for JitRequest upon deletion", "name", jitRequest.GetName())
 
 	return nil, nil
 }

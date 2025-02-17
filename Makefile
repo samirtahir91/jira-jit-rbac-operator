@@ -59,34 +59,34 @@ fmt: ## Run go fmt against code.
 vet: ## Run go vet against code.
 	go vet ./...
 
-
 .PHONY: unit-test-utils
 unit-test-utils: manifests generate fmt vet envtest ## Run unit tests.
-	go test $$(go list ./... | grep pkg) -v -ginkgo.v -coverprofile cover.out
-	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test $$(go list ./... | grep -E '/internal/controller') -v -ginkgo.v --ginkgo.label-filter="utils" -coverprofile cover.out
+	USE_EXISTING_CLUSTER=true OPERATOR_NAMESPACE=jira-jit-int-test UNIT_TEST=true KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test $$(go list ./... | grep -E '/internal/controller') -v -ginkgo.v --ginkgo.label-filter="utils" -coverprofile utils-cover.out
 
 .PHONY: unit-test-handlers
 unit-test-handlers: manifests generate fmt vet envtest ## Run unit tests.
-	go test $$(go list ./... | grep pkg) -v -ginkgo.v -coverprofile cover.out
-	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test $$(go list ./... | grep -E '/internal/controller') -v -ginkgo.v --ginkgo.label-filter="handlers" -coverprofile cover.out
+	USE_EXISTING_CLUSTER=true OPERATOR_NAMESPACE=jira-jit-int-test UNIT_TEST=true KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test $$(go list ./... | grep -E '/internal/controller') -v -ginkgo.v --ginkgo.label-filter="handlers" -coverprofile handlers-cover.out
 
 .PHONY: unit-test-jira_client
 unit-test-jira_client: manifests generate fmt vet envtest ## Run unit tests.
-	go test $$(go list ./... | grep pkg) -v -ginkgo.v -coverprofile cover.out
-	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test $$(go list ./... | grep -E '/internal/controller') -v -ginkgo.v --ginkgo.label-filter="jira_client" -coverprofile cover.out
+	USE_EXISTING_CLUSTER=true OPERATOR_NAMESPACE=jira-jit-int-test UNIT_TEST=true KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test $$(go list ./... | grep -E '/internal/controller') -v -ginkgo.v --ginkgo.label-filter="jira_client" -coverprofile jira_client-cover.out
+
+.PHONY: unit-test-pkg
+unit-test-pkg: manifests generate fmt vet envtest ## Run unit tests.
+	go test $$(go list ./... | grep pkg) -v -ginkgo.v -coverprofile pkg-cover.out
 
 .PHONY: unit-test
 unit-test: manifests generate fmt vet envtest ## Run unit tests.
 	go test $$(go list ./... | grep pkg) -v -ginkgo.v -coverprofile cover.out
-	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test $$(go list ./... | grep -E '/internal/controller') -v -ginkgo.v --ginkgo.label-filter="unit" -coverprofile cover.out
+	USE_EXISTING_CLUSTER=true OPERATOR_NAMESPACE=jira-jit-int-test UNIT_TEST=true KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test $$(go list ./... | grep -E '/internal/controller') -v -ginkgo.v --ginkgo.label-filter="unit" -coverprofile unit-cover.out
 
 .PHONY: test
 test: manifests generate fmt vet envtest ## Run tests.
-	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test $$(go list ./... | grep -E '/internal/controller') -v -ginkgo.v --ginkgo.label-filter="integration" -coverprofile cover.out
+	USE_EXISTING_CLUSTER=true OPERATOR_NAMESPACE=jira-jit-int-test UNIT_TEST=false OPERATOR_NAMESPACE=jira-jit-int-test KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test $$(go list ./... | grep -E '/internal/controller') -v -ginkgo.v --ginkgo.label-filter="integration" -coverprofile cover.out
 
 .PHONY: test-webhooks
 test-webhooks: manifests generate fmt vet envtest ## Run tests.
-	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test ./internal/webhook/v1 -v -ginkgo.v -coverprofile cover.out
+	USE_EXISTING_CLUSTER=false OPERATOR_NAMESPACE=jira-jit-int-test KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test ./internal/webhook/v1 -v -ginkgo.v -coverprofile cover.out
 
 # TODO(user): To use a different vendor for e2e tests, modify the setup under 'tests/e2e'.
 # The default setup assumes Kind is pre-installed and builds/loads the Manager Docker image locally.

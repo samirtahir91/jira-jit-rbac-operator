@@ -2,7 +2,7 @@ package controller
 
 import (
 	v1 "jira-jit-rbac-operator/api/v1"
-	test_utils "jira-jit-rbac-operator/test/utils"
+	testUtils "jira-jit-rbac-operator/test/utils"
 	"os/exec"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -54,46 +54,46 @@ var _ = Describe("JitRequestReconciler jira_client Unit Tests", Ordered, Label("
 
 		By("removing manager config")
 		cmd := exec.Command("kubectl", "delete", "jitcfg", TestJitConfig)
-		_, _ = test_utils.Run(cmd)
+		_, _ = testUtils.Run(cmd)
 
 		By("removing jitRequest")
 		cmd = exec.Command("kubectl", "delete", "jitreq", JitRequestName)
-		_, _ = test_utils.Run(cmd)
+		_, _ = testUtils.Run(cmd)
 
 		By("removing manager namespace")
 		cmd = exec.Command("kubectl", "delete", "ns", TestNamespace)
-		_, _ = test_utils.Run(cmd)
+		_, _ = testUtils.Run(cmd)
 
 		By("creating manager namespace")
-		err := test_utils.CreateNamespace(ctx, k8sClient, TestNamespace)
+		err := testUtils.CreateNamespace(ctx, k8sClient, TestNamespace)
 		Expect(err).NotTo(HaveOccurred())
 	})
 
 	AfterAll(func() {
 		By("removing manager namespace")
 		cmd := exec.Command("kubectl", "delete", "ns", TestNamespace)
-		_, _ = test_utils.Run(cmd)
+		_, _ = testUtils.Run(cmd)
 
 		By("removing manager config")
 		cmd = exec.Command("kubectl", "delete", "jitcfg", TestJitConfig)
-		_, _ = test_utils.Run(cmd)
+		_, _ = testUtils.Run(cmd)
 
 		By("removing jitRequest")
 		cmd = exec.Command("kubectl", "delete", "jitreq", JitRequestName)
-		_, _ = test_utils.Run(cmd)
+		_, _ = testUtils.Run(cmd)
 	})
 
 	AfterEach(func() {
 		By("removing jitRequest")
 		cmd := exec.Command("kubectl", "delete", "jitreq", JitRequestName)
-		_, _ = test_utils.Run(cmd)
+		_, _ = testUtils.Run(cmd)
 	})
 
 	Describe("preApproveRequest", func() {
 
 		It("should reject if startTime has exceeded current time", func() {
 			By("Simulating an expired start time")
-			jitRequest, err := test_utils.CreateJitRequest(ctx, reconciler.Client, -1, test_utils.ValidClusterRole, TestNamespace)
+			jitRequest, err := testUtils.CreateJitRequest(ctx, reconciler.Client, -1, testUtils.ValidClusterRole, TestNamespace)
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Attempting to pre-approve with invlaid start time")
@@ -116,7 +116,7 @@ var _ = Describe("JitRequestReconciler jira_client Unit Tests", Ordered, Label("
 
 		It("should pre-approve valid JitRequests", func() {
 			By("Simulating a valid JitRequest")
-			jitRequest, err := test_utils.CreateJitRequest(ctx, reconciler.Client, 10, test_utils.ValidClusterRole, TestNamespace)
+			jitRequest, err := testUtils.CreateJitRequest(ctx, reconciler.Client, 10, testUtils.ValidClusterRole, TestNamespace)
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Creating a Jira ticket")
@@ -146,7 +146,7 @@ var _ = Describe("JitRequestReconciler jira_client Unit Tests", Ordered, Label("
 
 		It("should create a Jira Ticket", func() {
 			By("Simulating a valid JitRequest")
-			jitRequest, err := test_utils.CreateJitRequest(ctx, reconciler.Client, 10, test_utils.ValidClusterRole, TestNamespace)
+			jitRequest, err := testUtils.CreateJitRequest(ctx, reconciler.Client, 10, testUtils.ValidClusterRole, TestNamespace)
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Creating a Jira ticket")
@@ -157,7 +157,7 @@ var _ = Describe("JitRequestReconciler jira_client Unit Tests", Ordered, Label("
 
 		It("should return Skipped if missing jira field", func() {
 			By("Simulating a valid JitRequest")
-			jitRequest, err := test_utils.CreateJitRequest(ctx, reconciler.Client, 10, test_utils.ValidClusterRole, TestNamespace)
+			jitRequest, err := testUtils.CreateJitRequest(ctx, reconciler.Client, 10, testUtils.ValidClusterRole, TestNamespace)
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Checking removing a field required and creating a jira ticket")
@@ -184,7 +184,7 @@ var _ = Describe("JitRequestReconciler jira_client Unit Tests", Ordered, Label("
 
 		It("should reject a Jira Ticket", func() {
 			By("Simulating a valid JitRequest")
-			jitRequest, err := test_utils.CreateJitRequest(ctx, reconciler.Client, 10, test_utils.ValidClusterRole, TestNamespace)
+			jitRequest, err := testUtils.CreateJitRequest(ctx, reconciler.Client, 10, testUtils.ValidClusterRole, TestNamespace)
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Creating a jira ticket")
@@ -203,7 +203,7 @@ var _ = Describe("JitRequestReconciler jira_client Unit Tests", Ordered, Label("
 
 		It("should update a Jira Ticket", func() {
 			By("Simulating a valid JitRequest")
-			jitRequest, err := test_utils.CreateJitRequest(ctx, reconciler.Client, 10, test_utils.ValidClusterRole, TestNamespace)
+			jitRequest, err := testUtils.CreateJitRequest(ctx, reconciler.Client, 10, testUtils.ValidClusterRole, TestNamespace)
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Creating a jira ticket")
@@ -221,7 +221,7 @@ var _ = Describe("JitRequestReconciler jira_client Unit Tests", Ordered, Label("
 
 		It("should complete a Jira Ticket", func() {
 			By("Simulating a valid JitRequest")
-			jitRequest, err := test_utils.CreateJitRequest(ctx, reconciler.Client, 10, test_utils.ValidClusterRole, TestNamespace)
+			jitRequest, err := testUtils.CreateJitRequest(ctx, reconciler.Client, 10, testUtils.ValidClusterRole, TestNamespace)
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Creating a jira ticket")
@@ -239,7 +239,7 @@ var _ = Describe("JitRequestReconciler jira_client Unit Tests", Ordered, Label("
 
 		It("should return nil for an approved jira ticket", func() {
 			By("Simulating a valid JitRequest")
-			jitRequest, err := test_utils.CreateJitRequest(ctx, reconciler.Client, 10, test_utils.ValidClusterRole, TestNamespace)
+			jitRequest, err := testUtils.CreateJitRequest(ctx, reconciler.Client, 10, testUtils.ValidClusterRole, TestNamespace)
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Creating a jira ticket")
@@ -248,16 +248,16 @@ var _ = Describe("JitRequestReconciler jira_client Unit Tests", Ordered, Label("
 
 			By("Approving a jira ticket")
 			jitRequest.Status.JiraTicket = ticket
-			test_utils.IssueStatus = test_utils.TestJiraWorkflowApproved
+			testUtils.IssueStatus = testUtils.TestJiraWorkflowApproved
 
 			By("Checking getJiraApproval has no error")
-			err = reconciler.getJiraApproval(ctx, jitRequest, test_utils.IssueStatus)
+			err = reconciler.getJiraApproval(ctx, jitRequest, testUtils.IssueStatus)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
 		It("should return err for a non-approved jira ticket", func() {
 			By("Simulating a valid JitRequest")
-			jitRequest, err := test_utils.CreateJitRequest(ctx, reconciler.Client, 10, test_utils.ValidClusterRole, TestNamespace)
+			jitRequest, err := testUtils.CreateJitRequest(ctx, reconciler.Client, 10, testUtils.ValidClusterRole, TestNamespace)
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Creating a jira ticket")

@@ -89,33 +89,6 @@ func CreateHTTPServer() *httptest.Server {
 	return server
 }
 
-// func CreateHTTPServer() *httptest.Server {
-// 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-// 		switch r.Method {
-// 		case http.MethodPost:
-// 			if r.URL.Path == "/rest/api/2/issue" {
-// 				createIssue(w, r)
-// 			} else if strings.HasPrefix(r.URL.Path, "/rest/api/2/issue/") && strings.HasSuffix(r.URL.Path, "/comment") {
-// 				addComment(w, r)
-// 			}
-// 		case http.MethodPut:
-// 			if r.URL.Path == "/rest/api/2/issue/transition/rejected" {
-// 				transitionIssue(w, r, "rejected")
-// 			} else if r.URL.Path == "/rest/api/2/issue/transition/completed" {
-// 				transitionIssue(w, r, "completed")
-// 			}
-// 		case http.MethodGet:
-// 			if strings.HasPrefix(r.URL.Path, "/rest/api/2/issue/") {
-// 				getIssueDetails(w, r)
-// 			} else if r.URL.Path == "/rest/api/2/user/search" {
-// 				getUserByEmail(w, r)
-// 			}
-// 		default:
-// 			http.NotFound(w, r)
-// 		}
-// 	}))
-// }
-
 func createIssue(w http.ResponseWriter, r *http.Request) {
 	var issue Issue
 	if err := json.NewDecoder(r.Body).Decode(&issue); err != nil {

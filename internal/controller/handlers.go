@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	justintimev1 "jira-jit-rbac-operator/api/v1"
-	utils "jira-jit-rbac-operator/pkg/utils"
+	"jira-jit-rbac-operator/pkg/utils"
 	"os"
 	"strings"
 	"time"
