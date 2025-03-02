@@ -33,7 +33,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// ReadConfigFromFile Read operator configuration from config file
+// ReadConfigFromFile Reads operator configuration from config file
 func ReadConfigFromFile() (*justintimev1.JustInTimeConfigSpec, error) {
 	// common lock for concurrent reads
 	config.ConfigLock.RLock()
@@ -62,7 +62,7 @@ func Contains(slice []string, item string) bool {
 	return false
 }
 
-// ValidateNamespaceRegex Validate namespace name with regex if provided
+// ValidateNamespaceRegex validates namespace name with regex if provided
 func ValidateNamespaceRegex(namespaces []string) (string, error) {
 	if config.NamespaceAllowedRegex != nil {
 		for _, namespace := range namespaces {
@@ -78,12 +78,8 @@ func ValidateNamespaceRegex(namespaces []string) (string, error) {
 	return "", nil
 }
 
-// ValidateNamespaceLabels Validate namespace(s) have namespaceLabels
-func ValidateNamespaceLabels(
-	ctx context.Context,
-	jitRequest *justintimev1.JitRequest,
-	k8sClient client.Client,
-) ([]string, error) {
+// ValidateNamespaceLabels validates namespace(s) have namespaceLabels
+func ValidateNamespaceLabels(ctx context.Context, jitRequest *justintimev1.JitRequest, k8sClient client.Client) ([]string, error) { //nolint:lll
 
 	// if there are no namespace labels, skip and return
 	if len(jitRequest.Spec.NamespaceLabels) == 0 {

@@ -76,7 +76,7 @@ func GetAndLoadCertMgrImg() {
 	}
 }
 
-// CreateNamespace Function to create a namespace
+// CreateNamespace creates a namespace
 func CreateNamespace(ctx context.Context, k8sClient client.Client, namespace string) error {
 
 	ns := &corev1.Namespace{
@@ -92,16 +92,8 @@ func CreateNamespace(ctx context.Context, k8sClient client.Client, namespace str
 	return nil
 }
 
-// CheckEvent Function to check and wait for an event in a namespace
-func CheckEvent(
-	ctx context.Context,
-	k8sClient client.Client,
-	objectName string,
-	namespace string,
-	eventType string,
-	reason string,
-	message string,
-) error {
+// CheckEvent checks and waits for an event in a namespace
+func CheckEvent(ctx context.Context, k8sClient client.Client, objectName string, namespace string, eventType string, reason string, message string) error { //nolint:lll
 	listOptions := &client.ListOptions{
 		Namespace: namespace,
 	}
@@ -131,6 +123,7 @@ func CheckEvent(
 	return nil
 }
 
+// CheckJitRemoved checks and JitRequest is deleted
 func CheckJitRemoved(ctx context.Context, k8sClient client.Client, name string) error {
 	Eventually(func() bool {
 		jitRequest := &justintimev1.JitRequest{}
@@ -150,6 +143,7 @@ func CheckJitRemoved(ctx context.Context, k8sClient client.Client, name string) 
 	return nil
 }
 
+// CheckRoleBindingRemoved checks a role binding is removed
 func CheckRoleBindingRemoved(ctx context.Context, k8sClient client.Client, namespace string, name string) error {
 	Eventually(func() bool {
 		roleBinding := &rbacv1.RoleBinding{}
@@ -169,7 +163,7 @@ func CheckRoleBindingRemoved(ctx context.Context, k8sClient client.Client, names
 	return nil
 }
 
-// CheckRoleBindingExists Function to check RoleBinding exists
+// CheckRoleBindingExists checks a Role Binding exists
 func CheckRoleBindingExists(ctx context.Context, k8sClient client.Client, namespace string, name string) error {
 	Eventually(func() bool {
 		roleBinding := &rbacv1.RoleBinding{}
@@ -186,13 +180,8 @@ func CheckRoleBindingExists(ctx context.Context, k8sClient client.Client, namesp
 	return nil
 }
 
-// CheckJitStatus Function to check the status of a JustInTimeRequest
-func CheckJitStatus(
-	ctx context.Context,
-	k8sClient client.Client,
-	jitRequest *justintimev1.JitRequest,
-	status string,
-) error {
+// CheckJitStatus checks the status of a JustInTimeRequest
+func CheckJitStatus(ctx context.Context, k8sClient client.Client, jitRequest *justintimev1.JitRequest, status string) error { //nolint:lll
 
 	// Check if the status gets populated with the expected
 	Eventually(func() bool {
@@ -211,14 +200,8 @@ func CheckJitStatus(
 	return nil
 }
 
-// CreateJitRequest Function to create a JustInTimeRequest with a startTime delay in seconds
-func CreateJitRequest(
-	ctx context.Context,
-	k8sClient client.Client,
-	startDelay time.Duration,
-	clusterRole, namespace string,
-	label ...string,
-) (*justintimev1.JitRequest, error) {
+// CreateJitRequest creates a JustInTimeRequest with a startTime delay in seconds
+func CreateJitRequest(ctx context.Context, k8sClient client.Client, startDelay time.Duration, clusterRole, namespace string, label ...string) (*justintimev1.JitRequest, error) { //nolint:lll
 	// optional label
 	namespaceLabels := make(map[string]string)
 	if len(label) > 0 && label[0] != "" {
@@ -253,7 +236,7 @@ func CreateJitRequest(
 	return jit, nil
 }
 
-// CreateJitConfig Function to create a JustInTimeConfig
+// CreateJitConfig creates a JustInTimeConfig
 func CreateJitConfig(ctx context.Context, k8sClient client.Client, clusterRole, namespace string) error {
 
 	jitCfg := &justintimev1.JustInTimeConfig{

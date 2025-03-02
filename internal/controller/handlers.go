@@ -14,13 +14,8 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 )
 
-// Reject Jira ticket and delete JitRequest
-func (r *JitRequestReconciler) handleRejected(
-	ctx context.Context,
-	l logr.Logger,
-	jitRequest *justintimev1.JitRequest,
-	rejectedTransitionID string,
-) (ctrl.Result, error) {
+// handleRejected rejects Jira ticket and deletes a JitRequest
+func (r *JitRequestReconciler) handleRejected(ctx context.Context, l logr.Logger, jitRequest *justintimev1.JitRequest, rejectedTransitionID string) (ctrl.Result, error) {
 	// Reject jira ticket
 	if jitRequest.Status.JiraTicket != Skipped {
 		if err := r.rejectJiraTicket(ctx, jitRequest, rejectedTransitionID); err != nil {
@@ -36,20 +31,8 @@ func (r *JitRequestReconciler) handleRejected(
 	return ctrl.Result{}, nil
 }
 
-// Create new Jira ticket for new JitRequests, validate config
-func (r *JitRequestReconciler) handleNewRequest(
-	ctx context.Context,
-	l logr.Logger,
-	jitRequest *justintimev1.JitRequest,
-	allowedClusterRoles []string,
-	jiraProject,
-	jiraIssueType string,
-	customFieldsConfig map[string]justintimev1.CustomFieldSettings,
-	requiredFieldsConfig *justintimev1.RequiredFieldsSpec,
-	ticketLabels []string,
-	targetEnvironment *justintimev1.EnvironmentSpec,
-	additionalComments string,
-) (ctrl.Result, error) {
+// handleNewRequest creates a new Jira ticket for new JitRequests and validates config
+func (r *JitRequestReconciler) handleNewRequest(ctx context.Context, l logr.Logger, jitRequest *justintimev1.JitRequest, allowedClusterRoles []string, jiraProject, jiraIssueType string, customFieldsConfig map[string]justintimev1.CustomFieldSettings, requiredFieldsConfig *justintimev1.RequiredFieldsSpec, ticketLabels []string, targetEnvironment *justintimev1.EnvironmentSpec, additionalComments string) (ctrl.Result, error) {
 	jiraIssueKey, err := r.createJiraTicket(ctx, jitRequest, jiraProject, jiraIssueType, customFieldsConfig, requiredFieldsConfig, ticketLabels, targetEnvironment)
 	if err != nil {
 		l.Error(err, "failed to createJiraTicket")
@@ -83,14 +66,9 @@ func (r *JitRequestReconciler) handleNewRequest(
 	return r.preApproveRequest(ctx, l, jitRequest, jiraIssueKey, additionalComments)
 }
 
-// Create the rolebinding for approved JitRequests if the Jira is approved
-func (r *JitRequestReconciler) handlePreApproved(
-	ctx context.Context,
-	l logr.Logger,
-	jitRequest *justintimev1.JitRequest,
-	completedTransitionID, jiraWorkflowApproveStatus string,
-) (ctrl.Result, error) {
-	// check if needs to be re-queued
+// handlePreApproved creates the role binding for approved JitRequests if the Jira ticket is approved
+func (r *JitRequestReconciler) handlePreApproved(ctx context.Context, l logr.Logger, jitRequest *justintimev1.JitRequest, completedTransitionID, jiraWorkflowApproveStatus string) (ctrl.Result, error) {
+	// check if it needs to be re-queued
 	startTime := jitRequest.Status.StartTime.Time
 	if startTime.After(time.Now()) {
 		// requeue for start time
@@ -125,15 +103,15 @@ func (r *JitRequestReconciler) handlePreApproved(
 	}
 
 	// Queue for deletion at end time
-	return r.handleCleaup(ctx, l, jitRequest)
+	return r.handleCleanup(ctx, l, jitRequest)
 }
 
-// Handle and queue succeeded and unknown JitRequests for deletion
-func (r *JitRequestReconciler) handleCleaup(ctx context.Context, l logr.Logger, jitRequest *justintimev1.JitRequest) (ctrl.Result, error) {
+// handleCleanup cleans up and re-queue succeeded and unknown JitRequests for deletion
+func (r *JitRequestReconciler) handleCleanup(ctx context.Context, l logr.Logger, jitRequest *justintimev1.JitRequest) (ctrl.Result, error) {
 	endTime := jitRequest.Status.EndTime.Time
 	if endTime.After(time.Now()) {
 		delay := time.Until(endTime)
-		l.Info("End time not reached, requeuing", "requeueAfter", delay)
+		l.Info("End time not reached, re-queuing", "requeueAfter", delay)
 		return ctrl.Result{RequeueAfter: delay}, nil
 	}
 
@@ -144,13 +122,8 @@ func (r *JitRequestReconciler) handleCleaup(ctx context.Context, l logr.Logger, 
 	return ctrl.Result{}, nil
 }
 
-// Cleanup owned objects (rolebindings) on deleted JitRequests
-func (r *JitRequestReconciler) handleFetchError(
-	ctx context.Context,
-	l logr.Logger,
-	err error,
-	jitRequest *justintimev1.JitRequest,
-) (ctrl.Result, error) {
+// handleFetchError cleans-up owned objects (role bindings) on deleted JitRequests
+func (r *JitRequestReconciler) handleFetchError(ctx context.Context, l logr.Logger, err error, jitRequest *justintimev1.JitRequest) (ctrl.Result, error) {
 	if apierrors.IsNotFound(err) {
 		l.Info("JitRequest resource not found. Deleting managed objects.")
 		if err := r.deleteOwnedObjects(ctx, jitRequest); err != nil {

@@ -84,6 +84,10 @@ unit-test: manifests generate fmt vet envtest ## Run unit tests.
 test: manifests generate fmt vet envtest ## Run tests.
 	USE_EXISTING_CLUSTER=true OPERATOR_NAMESPACE=jira-jit-int-test UNIT_TEST=false OPERATOR_NAMESPACE=jira-jit-int-test KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test $$(go list ./... | grep -E '/internal/controller') -v -ginkgo.v --ginkgo.label-filter="integration" -coverprofile cover.out
 
+.PHONY: test-config
+test-config: manifests generate fmt vet envtest ## Run tests.
+	USE_EXISTING_CLUSTER=true OPERATOR_NAMESPACE=jira-jit-int-test UNIT_TEST=false OPERATOR_NAMESPACE=jira-jit-int-test KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test $$(go list ./... | grep -E '/internal/config') -v -ginkgo.v --ginkgo.label-filter="integration" -coverprofile config-cover.out
+
 .PHONY: test-webhooks
 test-webhooks: manifests generate fmt vet envtest ## Run tests.
 	USE_EXISTING_CLUSTER=false OPERATOR_NAMESPACE=jira-jit-int-test KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test ./internal/webhook/v1 -v -ginkgo.v -coverprofile cover.out
@@ -207,7 +211,7 @@ GOLANGCI_LINT = $(LOCALBIN)/golangci-lint
 KUSTOMIZE_VERSION ?= v5.5.0
 CONTROLLER_TOOLS_VERSION ?= v0.16.4
 ENVTEST_VERSION ?= release-0.19
-GOLANGCI_LINT_VERSION ?= v1.61.0
+GOLANGCI_LINT_VERSION ?= v1.64.5
 
 .PHONY: kustomize
 kustomize: $(KUSTOMIZE) ## Download kustomize locally if necessary.

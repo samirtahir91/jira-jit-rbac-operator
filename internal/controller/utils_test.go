@@ -7,6 +7,8 @@ import (
 	"os/exec"
 	"time"
 
+	"github.com/go-logr/logr"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -21,32 +23,38 @@ var _ = Describe("JitRequestReconciler utils Unit Tests", Ordered, Label("unit",
 
 	var reconciler *JitRequestReconciler
 	var fakeRecorder *record.FakeRecorder
-	var l = log.FromContext(ctx)
-	var globalJitRequest = &v1.JitRequest{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "e2e-jit-test",
-			UID:  "foo",
-		},
-		Spec: v1.JitRequestSpec{
-			ClusterRole: testUtils.ValidClusterRole,
-			Reporter:    "master-chief@unsc.com",
-			Namespaces: []string{
-				TestNamespace,
-			},
-			AdditionUserEmails: []string{
-				"foo@foo.com",
-			},
-			NamespaceLabels: make(map[string]string),
-			StartTime:       metav1.NewTime(metav1.Now().Add(10 * time.Second)),
-			EndTime:         metav1.NewTime(metav1.Now().Add(20 * time.Second)),
-			JiraFields: map[string]string{
-				"Approver":      "cptKeyes",
-				"ProductOwner":  "Oni",
-				"Justification": "I need a weapon",
-			},
-		},
-	}
+	var l logr.Logger
+	var genericJitRequest *v1.JitRequest
+
 	BeforeEach(func() {
+		l = log.FromContext(ctx)
+
+		By("defining a global jitRequest")
+		genericJitRequest = &v1.JitRequest{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "e2e-jit-test",
+				UID:  "foo",
+			},
+			Spec: v1.JitRequestSpec{
+				ClusterRole: testUtils.ValidClusterRole,
+				Reporter:    "master-chief@unsc.com",
+				Namespaces: []string{
+					TestNamespace,
+				},
+				AdditionUserEmails: []string{
+					"foo@foo.com",
+				},
+				NamespaceLabels: make(map[string]string),
+				StartTime:       metav1.NewTime(metav1.Now().Add(10 * time.Second)),
+				EndTime:         metav1.NewTime(metav1.Now().Add(20 * time.Second)),
+				JiraFields: map[string]string{
+					"Approver":      "cptKeyes",
+					"ProductOwner":  "Oni",
+					"Justification": "I need a weapon",
+				},
+			},
+		}
+
 		By("setting a jitRequest reconciler")
 		fakeRecorder = record.NewFakeRecorder(10)
 		reconciler = &JitRequestReconciler{
@@ -169,7 +177,7 @@ var _ = Describe("JitRequestReconciler utils Unit Tests", Ordered, Label("unit",
 	Describe("raiseEvent", func() {
 
 		It("should record an event successfully", func() {
-			reconciler.raiseEvent(globalJitRequest, "Warning", "JiraNotApproved", "raiseEvent test")
+			reconciler.raiseEvent(genericJitRequest, "Warning", "JiraNotApproved", "raiseEvent test")
 
 			By("Checking the event exists")
 			event := <-fakeRecorder.Events
@@ -222,11 +230,11 @@ var _ = Describe("JitRequestReconciler utils Unit Tests", Ordered, Label("unit",
 
 		It("should create role bindings", func() {
 			// Create role binding
-			err := reconciler.createRoleBinding(ctx, globalJitRequest)
+			err := reconciler.createRoleBinding(ctx, genericJitRequest)
 			Expect(err).NotTo(HaveOccurred())
 
 			By("checking role binding exists")
-			rbName := fmt.Sprintf("%s-jit", globalJitRequest.Name)
+			rbName := fmt.Sprintf("%s-jit", genericJitRequest.Name)
 			rb := &rbacv1.RoleBinding{}
 			namespacedName := types.NamespacedName{
 				Namespace: TestNamespace,
@@ -241,7 +249,7 @@ var _ = Describe("JitRequestReconciler utils Unit Tests", Ordered, Label("unit",
 
 		It("should delete role bindings", func() {
 			// Create role binding
-			jitRequest := globalJitRequest
+			jitRequest := genericJitRequest
 			jitRequest.ObjectMeta.UID = "deleteOwnedObjects"
 			jitRequest.ObjectMeta.Name = "deleteOwnedObjects"
 			err := reconciler.createRoleBinding(ctx, jitRequest)

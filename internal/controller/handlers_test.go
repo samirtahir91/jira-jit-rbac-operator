@@ -10,6 +10,8 @@ import (
 	"regexp"
 	"time"
 
+	"github.com/go-logr/logr"
+
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
@@ -29,31 +31,36 @@ const JiraTicket = "IAM-1"
 var _ = Describe("JitRequestReconciler handlers Unit Tests", Ordered, Label("unit", "handlers"), func() {
 
 	var reconciler *JitRequestReconciler
-	l := log.FromContext(ctx)
 	var fakeRecorder *record.FakeRecorder
-
-	// test jitConfig
-	allowedClusterRoles := []string{"edit"}
-	jiraProject := "IAM"
-	jiraIssueType := "Access Request"
-	customFieldsConfig := map[string]v1.CustomFieldSettings{
-		"Approver":      {Type: "user", JiraCustomField: "customfield_10114"},
-		"ProductOwner":  {Type: "user", JiraCustomField: "customfield_10115"},
-		"Justification": {Type: "text", JiraCustomField: "customfield_10116"},
-	}
-	requiredFieldsConfig := &v1.RequiredFieldsSpec{
-		StartTime:   v1.CustomFieldSettings{Type: "date", JiraCustomField: "customfield_10118"},
-		EndTime:     v1.CustomFieldSettings{Type: "date", JiraCustomField: "customfield_10119"},
-		ClusterRole: v1.CustomFieldSettings{Type: "date", JiraCustomField: "customfield_10117"},
-	}
-	ticketLabels := []string{"label1", "label2"}
-	targetEnvironment := &v1.EnvironmentSpec{
-		Environment: "dev-test",
-		Cluster:     "minikube",
-	}
-	additionalComments := "This is a test comment."
+	var l logr.Logger
+	var jitConfig *v1.JustInTimeConfigSpec
 
 	BeforeEach(func() {
+		l = log.FromContext(ctx)
+
+		By("setting a jitConfig")
+		jitConfig = &v1.JustInTimeConfigSpec{
+			AllowedClusterRoles: []string{"edit"},
+			JiraProject:         "IAM",
+			JiraIssueType:       "Access Request",
+			CustomFields: map[string]v1.CustomFieldSettings{
+				"Approver":      {Type: "user", JiraCustomField: "customfield_10114"},
+				"ProductOwner":  {Type: "user", JiraCustomField: "customfield_10115"},
+				"Justification": {Type: "text", JiraCustomField: "customfield_10116"},
+			},
+			RequiredFields: &v1.RequiredFieldsSpec{
+				StartTime:   v1.CustomFieldSettings{Type: "date", JiraCustomField: "customfield_10118"},
+				EndTime:     v1.CustomFieldSettings{Type: "date", JiraCustomField: "customfield_10119"},
+				ClusterRole: v1.CustomFieldSettings{Type: "date", JiraCustomField: "customfield_10117"},
+			},
+			Labels: []string{"label1", "label2"},
+			Environment: &v1.EnvironmentSpec{
+				Environment: "dev-test",
+				Cluster:     "minikube",
+			},
+			AdditionalCommentText: "This is a test comment.",
+		}
+
 		By("setting a jitRequest reconciler")
 		fakeRecorder = record.NewFakeRecorder(10)
 		reconciler = &JitRequestReconciler{
@@ -110,7 +117,7 @@ var _ = Describe("JitRequestReconciler handlers Unit Tests", Ordered, Label("uni
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Checking the jitRequest is re-queued for startTime")
-			result, err := reconciler.handleNewRequest(ctx, l, jitRequest, allowedClusterRoles, jiraProject, jiraIssueType, customFieldsConfig, requiredFieldsConfig, ticketLabels, targetEnvironment, additionalComments)
+			result, err := reconciler.handleNewRequest(ctx, l, jitRequest, jitConfig.AllowedClusterRoles, jitConfig.JiraProject, jitConfig.JiraIssueType, jitConfig.CustomFields, jitConfig.RequiredFields, jitConfig.Labels, jitConfig.Environment, jitConfig.AdditionalCommentText)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result).NotTo(BeNil())
 			Expect(result.IsZero()).To(BeFalse())
@@ -135,7 +142,7 @@ var _ = Describe("JitRequestReconciler handlers Unit Tests", Ordered, Label("uni
 			missingCustomFieldsConfig := map[string]v1.CustomFieldSettings{
 				"MissingField": {Type: "user", JiraCustomField: "customfield_10114"},
 			}
-			result, err := reconciler.handleNewRequest(ctx, l, jitRequest, allowedClusterRoles, jiraProject, jiraIssueType, missingCustomFieldsConfig, requiredFieldsConfig, ticketLabels, targetEnvironment, additionalComments)
+			result, err := reconciler.handleNewRequest(ctx, l, jitRequest, jitConfig.AllowedClusterRoles, jitConfig.JiraProject, jitConfig.JiraIssueType, missingCustomFieldsConfig, jitConfig.RequiredFields, jitConfig.Labels, jitConfig.Environment, jitConfig.AdditionalCommentText)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result).NotTo(BeNil())
 			Expect(result.IsZero()).To(BeTrue())
@@ -157,7 +164,7 @@ var _ = Describe("JitRequestReconciler handlers Unit Tests", Ordered, Label("uni
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Checking controller returns with no error")
-			result, err := reconciler.handleNewRequest(ctx, l, jitRequest, allowedClusterRoles, jiraProject, jiraIssueType, customFieldsConfig, requiredFieldsConfig, ticketLabels, targetEnvironment, additionalComments)
+			result, err := reconciler.handleNewRequest(ctx, l, jitRequest, jitConfig.AllowedClusterRoles, jitConfig.JiraProject, jitConfig.JiraIssueType, jitConfig.CustomFields, jitConfig.RequiredFields, jitConfig.Labels, jitConfig.Environment, jitConfig.AdditionalCommentText)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result).NotTo(BeNil())
 			Expect(result.IsZero()).To(BeTrue())
@@ -179,7 +186,7 @@ var _ = Describe("JitRequestReconciler handlers Unit Tests", Ordered, Label("uni
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Checking controller returns with no error")
-			result, err := reconciler.handleNewRequest(ctx, l, jitRequest, allowedClusterRoles, jiraProject, jiraIssueType, customFieldsConfig, requiredFieldsConfig, ticketLabels, targetEnvironment, additionalComments)
+			result, err := reconciler.handleNewRequest(ctx, l, jitRequest, jitConfig.AllowedClusterRoles, jitConfig.JiraProject, jitConfig.JiraIssueType, jitConfig.CustomFields, jitConfig.RequiredFields, jitConfig.Labels, jitConfig.Environment, jitConfig.AdditionalCommentText)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result).NotTo(BeNil())
 			Expect(result.IsZero()).To(BeTrue())
@@ -204,7 +211,7 @@ var _ = Describe("JitRequestReconciler handlers Unit Tests", Ordered, Label("uni
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Checking controller returns with no error")
-			result, err := reconciler.handleNewRequest(ctx, l, jitRequest, allowedClusterRoles, jiraProject, jiraIssueType, customFieldsConfig, requiredFieldsConfig, ticketLabels, targetEnvironment, additionalComments)
+			result, err := reconciler.handleNewRequest(ctx, l, jitRequest, jitConfig.AllowedClusterRoles, jitConfig.JiraProject, jitConfig.JiraIssueType, jitConfig.CustomFields, jitConfig.RequiredFields, jitConfig.Labels, jitConfig.Environment, jitConfig.AdditionalCommentText)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result).NotTo(BeNil())
 			Expect(result.IsZero()).To(BeTrue())
@@ -335,7 +342,7 @@ var _ = Describe("JitRequestReconciler handlers Unit Tests", Ordered, Label("uni
 		})
 	})
 
-	Describe("handleCleaup", func() {
+	Describe("handleCleanup", func() {
 
 		It("should requeue a non-expired JitRequest", func() {
 			// Create JitRequest
@@ -343,7 +350,7 @@ var _ = Describe("JitRequestReconciler handlers Unit Tests", Ordered, Label("uni
 			Expect(err).NotTo(HaveOccurred())
 
 			jitRequest.Status.EndTime = metav1.NewTime(metav1.Now().Add(10 * time.Second))
-			result, err := reconciler.handleCleaup(ctx, l, jitRequest)
+			result, err := reconciler.handleCleanup(ctx, l, jitRequest)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result).NotTo(BeNil())
 			Expect(result.IsZero()).To(BeFalse())
@@ -356,7 +363,7 @@ var _ = Describe("JitRequestReconciler handlers Unit Tests", Ordered, Label("uni
 
 			By("Simulating an expired JitRequest")
 			jitRequest.Status.EndTime = metav1.NewTime(metav1.Now().Add(-1 * time.Second))
-			result, err := reconciler.handleCleaup(ctx, l, jitRequest)
+			result, err := reconciler.handleCleanup(ctx, l, jitRequest)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result).NotTo(BeNil())
 			Expect(result.IsZero()).To(BeTrue())

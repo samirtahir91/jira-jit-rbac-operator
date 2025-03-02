@@ -46,7 +46,7 @@ type JitRequestReconciler struct {
 	Recorder record.EventRecorder
 }
 
-// Reconcile loop
+// Reconcile is the main loop for reconciling a JitRequest
 func (r *JitRequestReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	l := log.FromContext(ctx)
 
@@ -84,16 +84,13 @@ func (r *JitRequestReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	case StatusPreApproved:
 		return r.handlePreApproved(ctx, l, jitRequest, completedTransitionID, jiraWorkflowApproveStatus)
 	case StatusSucceeded:
-		return r.handleCleaup(ctx, l, jitRequest)
+		return r.handleCleanup(ctx, l, jitRequest)
 	default:
-		return r.handleCleaup(ctx, l, jitRequest)
+		return r.handleCleanup(ctx, l, jitRequest)
 	}
 }
 
-/*
-Predicate function to filter events for JitRequest objects
-Ignore StatusRejected update event for JitRequest if the same
-*/
+// jitRequestPredicate filters events for JitRequest objects and ignores is StatusRejected is identical for update events
 func jitRequestPredicate() predicate.Predicate {
 	return predicate.Funcs{
 		UpdateFunc: func(e event.UpdateEvent) bool {
