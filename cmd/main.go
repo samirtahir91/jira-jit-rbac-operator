@@ -264,7 +264,7 @@ func main() {
 	}
 	// nolint:goconst
 	if os.Getenv("ENABLE_WEBHOOKS") == "true" {
-		if err = webhookjustintimev1.SetupJitRequestWebhookWithManager(mgr); err != nil {
+		if err = webhookjustintimev1.SetupJitRequestWebhookWithManager(mgr, jiraClient); err != nil {
 			setupLog.Error(err, "unable to create webhook", "webhook", "JitRequest")
 			os.Exit(1)
 		}

@@ -46,6 +46,7 @@ var issues = make(map[string]*Issue)
 var users = map[string]User{
 	"master-chief@unsc.com": {Name: "john117"},
 	"cpt-keyes@unsc.com":    {Name: "cptKeyes"},
+	"oni@unsc.com":          {Name: "oni"},
 }
 
 func CreateHTTPServer() *httptest.Server {

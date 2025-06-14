@@ -76,8 +76,8 @@ var _ = Describe("JitRequest Webhook", Ordered, func() {
 				StartTime:       metav1.NewTime(metav1.Now().Add(10 * time.Second)),
 				EndTime:         metav1.NewTime(metav1.Now().Add(20 * time.Second)),
 				JiraFields: map[string]string{
-					"Approver":      "cptKeyes",
-					"ProductOwner":  "Oni",
+					"Approver":      "cpt-keyes@unsc.com",
+					"ProductOwner":  "oni@unsc.com",
 					"Justification": "I need a weapon",
 				},
 			},
@@ -123,11 +123,45 @@ var _ = Describe("JitRequest Webhook", Ordered, func() {
 			Expect(validator.ValidateCreate(ctx, obj)).To(BeNil())
 		})
 
-		It("Should validate updates correctly", func() {
-			By("simulating a valid update scenario")
+		It("Should deny update if reporter is invalid", func() {
+			By("simulating an invalid reporter update")
 			oldObj := obj
 			obj.Spec.Reporter = "updated_value"
-			Expect(validator.ValidateUpdate(ctx, oldObj, obj)).To(BeNil())
+			Expect(validator.ValidateUpdate(ctx, oldObj, obj)).Error().To(
+				MatchError(ContainSubstring("failed to find reporter user")),
+				"reporter to fail if not a valid Jira user")
+		})
+
+		It("Should admit creation if reporter matches approver and allowSelfApprove is true", func() {
+			By("simulating reporter and approver being the same user with self-approve enabled")
+			// Save and set allowSelfApprove to true
+			origAllowSelfApprove := allowSelfApprove
+			allowSelfApprove = true
+			defer func() { allowSelfApprove = origAllowSelfApprove }()
+
+			sameUser := "master-chief@unsc.com"
+			obj.Spec.Reporter = sameUser
+			obj.Spec.JiraFields["Approver"] = sameUser
+			Expect(validator.ValidateCreate(ctx, obj)).To(BeNil(),
+				"should admit if reporter and approver are the same and self-approve is allowed")
+		})
+
+		It("Should deny creation if reporter matches approver", func() {
+			By("simulating reporter and approver being the same user")
+			sameUser := "master-chief@unsc.com"
+			obj.Spec.Reporter = sameUser
+			obj.Spec.JiraFields["Approver"] = sameUser
+			Expect(validator.ValidateCreate(ctx, obj)).Error().To(
+				MatchError(ContainSubstring("Reporter 'master-chief@unsc.com' cannot be the same as user field 'Approver'")),
+				"should fail if reporter and approver are the same")
+		})
+
+		It("Should deny creation if a Jira user field does not exist", func() {
+			By("simulating a non-existent Jira user in a user field")
+			obj.Spec.JiraFields["Approver"] = "nonexistent@unsc.com"
+			Expect(validator.ValidateCreate(ctx, obj)).Error().To(
+				MatchError(ContainSubstring("Jira user does not exist or failed to find user: Approver")),
+				"should fail if a Jira user field does not exist")
 		})
 
 		It("Should deny update if cluster role is invalid", func() {

@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	justintimev1 "jira-jit-rbac-operator/api/v1"
+	"net/http"
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
@@ -28,6 +29,7 @@ import (
 	"jira-jit-rbac-operator/internal/config"
 	"os"
 
+	jira "github.com/ctreminiom/go-atlassian/v2/jira/v2"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -124,4 +126,39 @@ func ValidateNamespaceLabels(ctx context.Context, jitRequest *justintimev1.JitRe
 	}
 
 	return nil, nil
+}
+
+// GetNameByEmail gets and returns ID for as Jira user by email - gets the 1st result
+func GetNameByEmail(email string, jiraClient *jira.Client) (string, error) {
+
+	type User struct {
+		Name string `json:"name"`
+	}
+
+	// RAW endpoint
+	apiEndpoint := fmt.Sprintf("rest/api/2/user/search?username=%s", email)
+	request, err := jiraClient.NewRequest(context.Background(), http.MethodGet, apiEndpoint, "", nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to find account name for reporter email: %w", err)
+	}
+
+	var users []User
+	response, err := jiraClient.Call(request, &users)
+	if err != nil {
+		if response != nil {
+			body := response.Bytes.String()
+			return "", fmt.Errorf("failed to find account name for reporter email: %w, response: %s", err, body)
+		} else {
+			return "", fmt.Errorf("failed to find account name for reporter email: %w, response: nil response", err)
+		}
+	}
+
+	// check if any users were found
+	if len(users) == 0 {
+		return "", fmt.Errorf("no users found with email: %s", email)
+	}
+
+	// get the account name
+	accountId := users[0].Name
+	return accountId, nil
 }
