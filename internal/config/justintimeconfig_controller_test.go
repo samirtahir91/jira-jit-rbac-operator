@@ -114,6 +114,7 @@ var _ = Describe("JustInTimeConfig Controller", Ordered, Label("integration"), f
 				},
 				AdditionalCommentText: "config: default",
 				NamespaceAllowedRegex: ".*",
+				SelfApprovalEnabled:   false,
 			}
 
 			// Read the generated config file

@@ -66,6 +66,7 @@ func NewJitRbacOperatorConfiguration(ctx context.Context, client client.Client, 
 							"ProductOwner":  {Type: "user", JiraCustomField: "customfield_10115"},
 							"Justification": {Type: "text", JiraCustomField: "customfield_10116"},
 						},
+						SelfApprovalEnabled: false,
 					},
 				}
 			}
@@ -74,6 +75,10 @@ func NewJitRbacOperatorConfiguration(ctx context.Context, client client.Client, 
 
 		return config
 	}}
+}
+
+func (c *jitRbacOperatorConfiguration) SelfApprovalEnabled() bool {
+	return c.retrievalFn().Spec.SelfApprovalEnabled
 }
 
 func (c *jitRbacOperatorConfiguration) NamespaceAllowedRegex() string {

@@ -31,4 +31,5 @@ type Configuration interface {
 	AdditionalCommentText() string
 	Environment() *justintimev1.EnvironmentSpec
 	NamespaceAllowedRegex() string
+	SelfApprovalEnabled() bool
 }

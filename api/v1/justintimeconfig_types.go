@@ -46,6 +46,8 @@ type JustInTimeConfigSpec struct {
 	AdditionalCommentText string `json:"additionalCommentText"`
 	// Optional regex to only allow namespace names matching the regular expression
 	NamespaceAllowedRegex string `json:"namespaceAllowedRegex,omitempty"`
+	// Toggle self-approval for JitRequests
+	SelfApprovalEnabled bool `json:"selfApprovalEnabled,omitempty"`
 }
 
 // EnvironmentSpec defines the specification for the environment

@@ -141,6 +141,9 @@ spec:
                 - EndTime
                 - StartTime
                 type: object
+              selfApprovalEnabled:
+                description: Toggle self-approval for JitRequests
+                type: boolean
               workflowApprovedStatus:
                 description: The value of the approved state for a Jira ticket, i.e.
                   "Approved"

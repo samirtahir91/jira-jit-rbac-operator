@@ -70,8 +70,6 @@ spec:
         imagePullPolicy: Never
         name: manager
         env:
-          - name: JIT_ALLOW_SELF_APPROVE
-            value: "false"
           - name: ENABLE_WEBHOOKS
             value: "false"
           - name: DEBUG_LOG

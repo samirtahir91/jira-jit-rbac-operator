@@ -54,6 +54,7 @@ var _ = Describe("JitRbacOperatorConfiguration", func() {
 			"ProductOwner":  {Type: "user", JiraCustomField: "customfield_10115"},
 			"Justification": {Type: "text", JiraCustomField: "customfield_10116"},
 		}))
+		Expect(config.SelfApprovalEnabled()).To(BeFalse())
 	})
 
 	It("should return the retrieved configuration if found", func() {
@@ -87,6 +88,7 @@ var _ = Describe("JitRbacOperatorConfiguration", func() {
 					"ProductOwner":  {Type: "user", JiraCustomField: "customfield_10115"},
 					"Justification": {Type: "text", JiraCustomField: "customfield_10116"},
 				},
+				SelfApprovalEnabled: true,
 			},
 		}
 
@@ -105,5 +107,6 @@ var _ = Describe("JitRbacOperatorConfiguration", func() {
 		Expect(config.Environment()).To(Equal(expectedConfig.Spec.Environment))
 		Expect(config.RequiredFields()).To(Equal(expectedConfig.Spec.RequiredFields))
 		Expect(config.CustomFields()).To(Equal(expectedConfig.Spec.CustomFields))
+		Expect(config.SelfApprovalEnabled()).To(BeTrue())
 	})
 })
