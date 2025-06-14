@@ -80,6 +80,8 @@ func (c *JustInTimeConfigReconciler) Reconcile(ctx context.Context, req ctrl.Req
 		cfg.AdditionalCommentText(),
 		"allowed namespace regex",
 		cfg.NamespaceAllowedRegex(),
+		"self approval enabled",
+		cfg.SelfApprovalEnabled(),
 	)
 
 	// validate regex and set for global use
@@ -131,6 +133,7 @@ func (c *JustInTimeConfigReconciler) SaveConfigToFile(ctx context.Context, cfg c
 		Labels:                    cfg.Labels(),
 		AdditionalCommentText:     cfg.AdditionalCommentText(),
 		NamespaceAllowedRegex:     cfg.NamespaceAllowedRegex(),
+		SelfApprovalEnabled:       cfg.SelfApprovalEnabled(),
 	}
 
 	data, err := json.MarshalIndent(configData, "", "  ")

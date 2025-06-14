@@ -17,6 +17,7 @@ limitations under the License.
 package v1
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -134,10 +135,52 @@ var _ = Describe("JitRequest Webhook", Ordered, func() {
 
 		It("Should admit creation if reporter matches approver and allowSelfApprove is true", func() {
 			By("simulating reporter and approver being the same user with self-approve enabled")
-			// Save and set allowSelfApprove to true
-			origAllowSelfApprove := allowSelfApprove
-			allowSelfApprove = true
-			defer func() { allowSelfApprove = origAllowSelfApprove }()
+			err := utils.PatchSelfApprovalEnabled(ctx, k8sClient, "jira-jit-rbac-operator-default", true)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Wait for the config file to reflect SelfApprovalEnabled = true
+			configFilePath := "/tmp/jit-test/config.json"
+			Eventually(func() bool {
+				f, err := os.Open(configFilePath)
+				if err != nil {
+					return false
+				}
+				defer func() {
+					_ = f.Close()
+				}()
+				type config struct {
+					SelfApprovalEnabled bool `json:"SelfApprovalEnabled"`
+				}
+				var c config
+				if err := json.NewDecoder(f).Decode(&c); err != nil {
+					return false
+				}
+				return c.SelfApprovalEnabled
+			}, time.Second*5, time.Millisecond*100).Should(BeTrue(), "Self-approval should be enabled in config file")
+
+			defer func() {
+				// Reset allowSelfApprove to false after test
+				err = utils.PatchSelfApprovalEnabled(ctx, k8sClient, "jira-jit-rbac-operator-default", false)
+				Expect(err).NotTo(HaveOccurred())
+				Eventually(func() bool {
+					f, err := os.Open(configFilePath)
+					if err != nil {
+						return false
+					}
+					defer func() {
+						_ = f.Close()
+					}()
+					type config struct {
+						SelfApprovalEnabled bool `json:"SelfApprovalEnabled"`
+					}
+					var c config
+					if err := json.NewDecoder(f).Decode(&c); err != nil {
+						return false
+					}
+					return c.SelfApprovalEnabled
+				}, time.Second*5, time.Millisecond*100).Should(BeFalse(), "Self-approval should be disabled in config file")
+
+			}()
 
 			sameUser := "master-chief@unsc.com"
 			obj.Spec.Reporter = sameUser

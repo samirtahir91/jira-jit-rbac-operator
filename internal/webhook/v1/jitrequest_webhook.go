@@ -19,7 +19,6 @@ package v1
 import (
 	"context"
 	"fmt"
-	"os"
 	"strings"
 	"time"
 
@@ -42,7 +41,6 @@ import (
 var jitRequestLog = logf.Log.WithName("jitrequest-resource")
 var globalClient client.Client
 var globalJiraClient *jira.Client
-var allowSelfApprove = os.Getenv("JIT_ALLOW_SELF_APPROVE") == "true"
 
 // SetupJitRequestWebhookWithManager registers the webhook for JitRequest in the manager.
 func SetupJitRequestWebhookWithManager(mgr ctrl.Manager, jiraClient *jira.Client) error {
@@ -141,7 +139,7 @@ func validateJitRequestSpec(ctx context.Context, jitRequest *justintimev1.JitReq
 				return field.Invalid(field.NewPath("spec").Child("jiraFields").Child(fieldName), jiraUser, errMsg), nil
 			}
 			// check reporter does not match user fields
-			if !allowSelfApprove && reporterName == jiraUserName {
+			if !operatorConfig.SelfApprovalEnabled && reporterName == jiraUserName {
 				errMsg := fmt.Sprintf("Reporter '%s' cannot be the same as user field '%s'", reporter, fieldName)
 				return field.Invalid(field.NewPath("spec").Child("jiraFields").Child(fieldName), jiraUser, errMsg), nil
 			}

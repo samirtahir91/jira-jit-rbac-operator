@@ -62,6 +62,7 @@ You must define these with the values according to your Jira Project and Workflo
 
 | **Field**                | **Description**                                                                 |
 |--------------------------|---------------------------------------------------------------------------------|
+| `selfApprovalEnabled`    | true/false (default) to allow Reporter to be the same for other jria user fields|
 | `workflowApprovedStatus` | The status indicating that the workflow has been approved in the Jira workflow. |
 | `rejectedTransitionID`   | The ID of the transition used when a workflow is rejected.                      |
 | `jiraProject`            | The Jira project associated with the request.                                   |
@@ -137,6 +138,7 @@ kind: JustInTimeConfig
 metadata:
   name: jira-jit-rbac-operator-default
 spec:
+  selfApprovalEnabled: false
   allowedClusterRoles:
     - admin
     - edit

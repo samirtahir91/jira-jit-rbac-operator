@@ -271,6 +271,7 @@ func CreateJitConfig(ctx context.Context, k8sClient client.Client, clusterRole, 
 				"ProductOwner":  {Type: "user", JiraCustomField: "customfield_10115"},
 				"Justification": {Type: "text", JiraCustomField: "customfield_10116"},
 			},
+			SelfApprovalEnabled: false,
 		},
 	}
 
@@ -279,6 +280,16 @@ func CreateJitConfig(ctx context.Context, k8sClient client.Client, clusterRole, 
 	}
 
 	return nil
+}
+
+// PatchSelfApprovalEnabled patches the SelfApprovalEnabled field in the JustInTimeConfig CR.
+func PatchSelfApprovalEnabled(ctx context.Context, k8sClient client.Client, configName string, enabled bool) error {
+	jitCfg := &justintimev1.JustInTimeConfig{}
+	if err := k8sClient.Get(ctx, client.ObjectKey{Name: configName}, jitCfg); err != nil {
+		return err
+	}
+	jitCfg.Spec.SelfApprovalEnabled = enabled
+	return k8sClient.Update(ctx, jitCfg)
 }
 
 // Run executes the provided command within this context

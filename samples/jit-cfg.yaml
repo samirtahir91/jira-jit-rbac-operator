@@ -3,6 +3,7 @@ kind: JustInTimeConfig
 metadata:
   name: jira-jit-rbac-operator-default
 spec:
+  selfApprovalEnabled: false
   allowedClusterRoles:
     - admin
     - edit
