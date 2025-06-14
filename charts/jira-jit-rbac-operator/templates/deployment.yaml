@@ -24,6 +24,8 @@ spec:
         command:
         - /manager
         env:
+        - name: JIT_ALLOW_SELF_APPROVE
+          value: {{ quote .Values.controllerManager.manager.env.jitAllowSelfApprove }}
         - name: ENABLE_WEBHOOKS
           value: {{ quote .Values.controllerManager.manager.env.enableWebhooks }}
         - name: DEBUG_LOG

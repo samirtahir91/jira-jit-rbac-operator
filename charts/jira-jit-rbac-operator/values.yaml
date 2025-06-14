@@ -15,6 +15,7 @@ controllerManager:
         drop:
         - ALL
     env:
+      jitAllowSelfApprove: "false"
       debugLog: "false"
       enableWebhooks: "true"
       jiraBaseUrl: http://my-jira-release.default.svc.cluster.local:80

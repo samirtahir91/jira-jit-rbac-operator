@@ -38,6 +38,19 @@ import (
 
 var OperatorNamespace = os.Getenv("OPERATOR_NAMESPACE")
 
+// +kubebuilder:rbac:groups=justintime.samir.io,resources=jitrequests,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=justintime.samir.io,resources=jitrequests/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=justintime.samir.io,resources=jitrequests/finalizers,verbs=update
+
+// +kubebuilder:rbac:groups=justintime.samir.io,resources=justintimeconfigs,verbs=get;list;watch;create;update;patch
+// +kubebuilder:rbac:groups=justintime.samir.io,resources=justintimeconfigs/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=justintime.samir.io,resources=justintimeconfigs/finalizers,verbs=update
+
+// +kubebuilder:rbac:groups=core,resources=events,verbs=create;patch
+
+// +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=rolebindings,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups="",resources=namespaces,verbs=get;list;watch
+
 // JitRequestReconciler reconciles a JitRequest object
 type JitRequestReconciler struct {
 	JiraClient *jira.Client
