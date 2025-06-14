@@ -3,11 +3,11 @@ package controller
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"strings"
 	"time"
 
 	justintimev1 "jira-jit-rbac-operator/api/v1"
+	"jira-jit-rbac-operator/pkg/utils"
 
 	"github.com/ctreminiom/go-atlassian/v2/pkg/infra/models"
 	"github.com/go-logr/logr"
@@ -101,41 +101,6 @@ func (r *JitRequestReconciler) getJiraApproval(ctx context.Context, jitRequest *
 	return fmt.Errorf("failed on jira approval")
 }
 
-// getNameByEmail gets and returns an account ID for a Jira user by email - assumes single email per user and gets the 1st result
-func (r *JitRequestReconciler) getNameByEmail(email string) (string, error) {
-
-	type User struct {
-		Name string `json:"name"`
-	}
-
-	// RAW endpoint
-	apiEndpoint := fmt.Sprintf("rest/api/2/user/search?username=%s", email)
-	request, err := r.JiraClient.NewRequest(context.Background(), http.MethodGet, apiEndpoint, "", nil)
-	if err != nil {
-		return "", fmt.Errorf("failed to find account name for reporter email: %w", err)
-	}
-
-	var users []User
-	response, err := r.JiraClient.Call(request, &users)
-	if err != nil {
-		if response != nil {
-			body := response.Bytes.String()
-			return "", fmt.Errorf("failed to find account name for reporter email: %w, response: %s", err, body)
-		} else {
-			return "", fmt.Errorf("failed to find account name for reporter email: %w, response: nil response", err)
-		}
-	}
-
-	// check if any users were found
-	if len(users) == 0 {
-		return "", fmt.Errorf("no users found with email: %s", email)
-	}
-
-	// get the account name
-	accountId := users[0].Name
-	return accountId, nil
-}
-
 // addCustomField is a helper function for createJiraTicket to build custom fields in jira ticket payload
 func addCustomField(ctx context.Context, customFields *models.CustomFields, fieldType, jiraCustomField, value string) {
 	l := log.FromContext(ctx)
@@ -208,7 +173,7 @@ func (r *JitRequestReconciler) createJiraTicket(ctx context.Context, jitRequest 
 	}
 
 	// Get Jira account ID from reporter email
-	reporterAccountName, err := r.getNameByEmail(jitRequest.Spec.Reporter)
+	reporterAccountName, err := utils.GetNameByEmail(jitRequest.Spec.Reporter, r.JiraClient)
 	if err != nil {
 		l.Error(err, "failed to create Jira ticket")
 		return "", err

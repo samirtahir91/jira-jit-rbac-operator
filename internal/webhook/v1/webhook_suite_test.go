@@ -21,6 +21,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"net"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
@@ -29,6 +30,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	jira "github.com/ctreminiom/go-atlassian/v2/jira/v2"
 	admissionv1 "k8s.io/api/admission/v1"
 	apimachineryruntime "k8s.io/apimachinery/pkg/runtime"
 	k8sScheme "k8s.io/client-go/kubernetes/scheme"
@@ -43,6 +45,7 @@ import (
 
 	justintimev1 "jira-jit-rbac-operator/api/v1"
 	"jira-jit-rbac-operator/internal/config"
+	"jira-jit-rbac-operator/test/utils"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -50,11 +53,13 @@ import (
 // http://onsi.github.io/ginkgo/ to learn more about Ginkgo.
 
 var (
-	ctx       context.Context
-	cancel    context.CancelFunc
-	k8sClient client.Client
-	cfg       *rest.Config
-	testEnv   *envtest.Environment
+	ctx        context.Context
+	cancel     context.CancelFunc
+	k8sClient  client.Client
+	cfg        *rest.Config
+	testEnv    *envtest.Environment
+	ts         *httptest.Server
+	jiraClient *jira.Client
 )
 
 func TestAPIs(t *testing.T) {
@@ -104,6 +109,16 @@ var _ = BeforeSuite(func() {
 	Expect(err).NotTo(HaveOccurred())
 	Expect(k8sClient).NotTo(BeNil())
 
+	// Start the stub server
+	ts = utils.CreateHTTPServer()
+
+	// Jira client
+	jiraBaseUrl := ts.URL
+	fmt.Print("\nJIRA HTTP STUB: ", jiraBaseUrl, "\n")
+	jiraClient, err = jira.New(nil, jiraBaseUrl)
+	Expect(err).ToNot(HaveOccurred())
+	jiraClient.Auth.SetBearerToken("dummy")
+
 	// start webhook server using Manager.
 	webhookInstallOptions := &testEnv.WebhookInstallOptions
 	mgr, err := ctrl.NewManager(cfg, ctrl.Options{
@@ -118,7 +133,7 @@ var _ = BeforeSuite(func() {
 	})
 	Expect(err).NotTo(HaveOccurred())
 
-	err = SetupJitRequestWebhookWithManager(mgr)
+	err = SetupJitRequestWebhookWithManager(mgr, jiraClient)
 	Expect(err).NotTo(HaveOccurred())
 
 	// +kubebuilder:scaffold:webhook
@@ -154,6 +169,9 @@ var _ = AfterSuite(func() {
 	cancel()
 	err := testEnv.Stop()
 	Expect(err).NotTo(HaveOccurred())
+
+	// Stop stub server
+	ts.Close()
 })
 
 // getFirstFoundEnvTestBinaryDir locates the first binary in the specified path.

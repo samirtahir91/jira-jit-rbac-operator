@@ -19,6 +19,7 @@ package v1
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -32,16 +33,21 @@ import (
 
 	justintimev1 "jira-jit-rbac-operator/api/v1"
 	"jira-jit-rbac-operator/pkg/utils"
+
+	jira "github.com/ctreminiom/go-atlassian/v2/jira/v2"
 )
 
 // nolint:unused
 // log is for logging in this package.
 var jitRequestLog = logf.Log.WithName("jitrequest-resource")
 var globalClient client.Client
+var globalJiraClient *jira.Client
+var allowSelfApprove = os.Getenv("JIT_ALLOW_SELF_APPROVE") == "true"
 
 // SetupJitRequestWebhookWithManager registers the webhook for JitRequest in the manager.
-func SetupJitRequestWebhookWithManager(mgr ctrl.Manager) error {
+func SetupJitRequestWebhookWithManager(mgr ctrl.Manager, jiraClient *jira.Client) error {
 	globalClient = mgr.GetClient()
+	globalJiraClient = jiraClient
 	return ctrl.NewWebhookManagedBy(mgr).For(&justintimev1.JitRequest{}).
 		WithValidator(&JitRequestCustomValidator{}).
 		Complete()
@@ -112,6 +118,33 @@ func validateJitRequestSpec(ctx context.Context, jitRequest *justintimev1.JitReq
 			// Missing field, reject
 			errMsg := fmt.Sprintf("missing custom field: %s", fieldName)
 			return field.Invalid(field.NewPath("spec").Child("jiraFields"), jitRequest.Spec.JiraFields, errMsg), nil
+		}
+	}
+
+	// get reporter name from jira
+	reporter := jitRequest.Spec.Reporter
+	reporterName, err := utils.GetNameByEmail(reporter, globalJiraClient)
+	if err != nil {
+		// reporter does not exist, reject
+		errMsg := fmt.Sprintf("failed to find reporter user: %s", reporter)
+		return field.Invalid(field.NewPath("spec").Child("userEmail"), reporter, errMsg), nil
+	}
+
+	// validate jira users exist and do not match reporter
+	for fieldName := range customFieldsConfig {
+		if customFieldsConfig[fieldName].Type == "user" {
+			jiraUser := jitRequest.Spec.JiraFields[fieldName]
+			jiraUserName, err := utils.GetNameByEmail(jiraUser, globalJiraClient)
+			// check jira user exists from user fields
+			if err != nil || jiraUser == "" {
+				errMsg := fmt.Sprintf("Jira user does not exist or failed to find user: %s", fieldName)
+				return field.Invalid(field.NewPath("spec").Child("jiraFields").Child(fieldName), jiraUser, errMsg), nil
+			}
+			// check reporter does not match user fields
+			if !allowSelfApprove && reporterName == jiraUserName {
+				errMsg := fmt.Sprintf("Reporter '%s' cannot be the same as user field '%s'", reporter, fieldName)
+				return field.Invalid(field.NewPath("spec").Child("jiraFields").Child(fieldName), jiraUser, errMsg), nil
+			}
 		}
 	}
 
